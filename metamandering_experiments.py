@@ -272,7 +272,7 @@ tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population
             
 exp_chain = MarkovChain(tree_proposal,
                                                     Validator([  # ,boundary_condition
-                                                               ]), accept=cut_accept, initial_state=sierp_partition,
+                                                               ]), initial_state=sierp_partition,
                                                     total_steps=steps)
 
 
