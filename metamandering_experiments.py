@@ -267,14 +267,6 @@ exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), acce
 z = 0
 num_cuts_list = []
 
-tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                                    node_repeats=1, method=my_mst_bipartition_tree_random)
-            
-exp_chain = MarkovChain(tree_proposal,
-                                                    Validator([  # ,boundary_condition
-                                                               ]), initial_state=sierp_partition,
-                                                    total_steps=steps)
-
 
 for part in exp_chain:
     z += 1
