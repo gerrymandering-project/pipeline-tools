@@ -18,6 +18,9 @@ from functools import partial
 import networkx as nx
 import numpy as np
 
+import seannas_code
+
+from gerrychain.tree import bipartition_tree as bpt
 from gerrychain import Graph
 from gerrychain import MarkovChain
 from gerrychain.constraints import (Validator, single_flip_contiguous,
@@ -39,7 +42,7 @@ def graph_from_url_processing(link):
     graph = Graph(g)
     graph.issue_warnings()
     for node in graph.nodes():
-        graph.nodes[node]["pos"] = [graph.node[node]['C_X'], graph.node[node]['C_Y'] ]
+        graph.nodes[node]["pos"] = [graph.nodes[node]['C_X'], graph.nodes[node]['C_Y'] ]
     deg_one_nodes = []
     for v in graph:
         if graph.degree(v) == 1:
@@ -48,10 +51,25 @@ def graph_from_url_processing(link):
         graph.remove_node(node)
     return graph
 
+def build_trivial_partition(graph):
+    assignment = {}
+    for y in graph.nodes():
+        assignment[y] = 1
+    first_node = list(graph.nodes())[0]
+    assignment[first_node] = -1
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
+    partition = Partition(graph, assignment=assignment, updaters=updaters)
+    return partition
+    
+    
+
 def build_partition_meta(graph, mean):
     assignment = {}
-    for y in graph.node():
-        if graph.node[y]['C_Y'] < mean:
+    for y in graph.nodes():
+        if graph.nodes[y]['C_Y'] < mean:
             assignment[y] = -1
         else:
             assignment[y] = 1
@@ -60,14 +78,18 @@ def build_partition_meta(graph, mean):
                         'step_num': step_num,
                         }
     partition = Partition(graph, assignment=assignment, updaters=updaters)
+    print("cut edges are", partition["cut_edges"])
     return partition
 
 def special_faces(graph, k):
     special_faces = []
     for node in graph.nodes():
-        if graph.node[node]['distance'] >= k:
+        if graph.nodes[node]['distance'] >= k:
             special_faces.append(node)
     return special_faces
+
+
+   
 
 def face_serpinsky_mesh(graph, special_faces):
     #parameters: 
@@ -101,7 +123,7 @@ def face_serpinsky_mesh(graph, special_faces):
                 label = max_label + 10
                 max_label += 10
             graph.add_node(label)
-            graph.node[label]['pos'] = distance
+            graph.nodes[label]['pos'] = distance
             connections.append(label)
         for v in range(0,len(connections)):
             if v+1 < len(connections):
@@ -128,6 +150,7 @@ def step_num(partition):
 # Experiement setup
 link = "https://people.csail.mit.edu/ddeford//COUNTY/COUNTY_13.json"
 g = graph_from_url_processing(link)
+
 dual = restricted_planar_dual(g)
 
 plt.figure()
@@ -139,11 +162,13 @@ plt.close()
 
 vertical = []
 for node in g.nodes():
-    g.nodes[node]["pos"] = [g.node[node]["C_X"], g.node[node]["C_Y"]]
+    g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
     vertical.append(g.nodes[node]["C_Y"])
 mean_y_coord = sum(vertical) / len(vertical)
 
 partition_y = build_partition_meta(g,mean_y_coord)
+
+
 
 crosses = compute_cross_edge(g, partition_y)
 
@@ -157,6 +182,21 @@ dual = distance_from_partition(dual, dual_crosses)
 special_faces = special_faces(dual,2)
 g_serpinsky = face_serpinsky_mesh(g, special_faces)
 
+
+for node in g_serpinsky:
+    g_serpinsky.nodes[node]['C_X'] = g_serpinsky.nodes[node]['pos'][0]
+    g_serpinsky.nodes[node]['C_Y'] = g_serpinsky.nodes[node]['pos'][1]
+    if 'population' not in g_serpinsky.nodes[node]:
+        g_serpinsky.nodes[node]['population'] = 0
+
+print("creating partition")
+
+total_pop = sum( [ g_serpinsky.nodes[node]['population'] for node in g_serpinsky])
+
+serp_partition = build_trivial_partition(g_serpinsky)
+
+print("created partition")
+
 plt.figure()
 nx.draw(g_serpinsky, pos=nx.get_node_attributes(g_serpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
 plt.savefig("./plots/Serpinsky_mesh.eps", format='eps')
@@ -166,18 +206,22 @@ for edge in g_serpinsky.edges():
     g_serpinsky[edge[0]][edge[1]]['cut_times'] = 0
 
     for n in g_serpinsky.nodes():
-        g_serpinsky.node[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
-        g_serpinsky.node[n]["last_flipped"] = 0
-        g_serpinsky.node[n]["num_flips"] = 0
+        g_serpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
+        g_serpinsky.nodes[n]["last_flipped"] = 0
+        g_serpinsky.nodes[n]["num_flips"] = 0
 pop1 = .05
 
 base = 1          
+
+
+
 popbound = within_percent_of_ideal_population(partition_y, pop1)
-ideal_population = sum(partition_y["population"].values()) / len(partition_y)
+ideal_population = sum(serp_partition["population"].values()) / len(partition_y)
 
 tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon=0.05,node_repeats=1)
 steps = 1000
-exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous, popbound]), accept=True, initial_state=partition_y,
+
+exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), accept=True, initial_state=serp_partition,
                                         total_steps=steps)
 z = 0
 num_cuts_list = []
@@ -187,6 +231,7 @@ for part in exp_chain:
 
     for edge in part["cut_edges"]:
         g_serpinsky[edge[0]][edge[1]]["cut_times"] += 1
+    print("finished round")
 
 plt.figure()
 nx.draw(g_serpinsky, pos={x: x for x in g_serpinsky.nodes()}, node_color=[0 for x in g_serpinsky.nodes()], node_size=1,
