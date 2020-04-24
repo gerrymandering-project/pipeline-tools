@@ -222,6 +222,16 @@ pop1 = 1
 base = 1          
 
 
+def get_spanning_tree_mst(graph):
+    for edge in graph.edges:
+        graph.edges[edge]["weight"] = random.random()
+
+    spanning_tree = nx.tree.maximum_spanning_tree(
+        graph, algorithm="kruskal", weight="weight"
+    )
+    return spanning_tree
+
+
 def my_mst_bipartition_tree_random(
     graph,
     pop_col,
