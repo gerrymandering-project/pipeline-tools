@@ -14,7 +14,7 @@ def graph_from_url(link):
     graph = Graph(g)
     graph.issue_warnings()
     for node in graph.nodes():
-        graph.nodes[node]["pos"] = [graph.node[node]['C_X'], graph.node[node]['C_Y'] ]
+        graph.nodes[node]["pos"] = [g.nodes[node]['C_X'], g.nodes[node]['C_Y'] ]
     return graph
 
 ###This will take a graph that (I know is) planar along with position data on the nodes, and construct face data.
@@ -256,7 +256,7 @@ def draw_with_location(graph):
 def build_partition(graph, mean):
     assignment = {}
     for y in graph.node():
-        if graph.node[y]['C_Y'] < mean:
+        if g.nodes[y]['C_Y'] < mean:
             assignment[y] = -1
         else:
             assignment[y] = 1
@@ -300,5 +300,5 @@ def distance_from_partition(graph, boundary_nodes):
             else:
                 dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[0])))
                 dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[1])))     
-        graph.node[node]["distance"] = dist
+        graph.nodes[node]["distance"] = dist
     return graph
