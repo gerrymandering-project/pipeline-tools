@@ -14,7 +14,7 @@ def graph_from_url(link):
     graph = Graph(g)
     graph.issue_warnings()
     for node in graph.nodes():
-        graph.nodes[node]["pos"] = [graph.node[node]['C_X'], graph.node[node]['C_Y'] ]
+        graph.nodes[node]["pos"] = [g.nodes[node]['C_X'], g.nodes[node]['C_Y'] ]
     return graph
 
 ###This will take a graph that (I know is) planar along with position data on the nodes, and construct face data.
@@ -256,7 +256,7 @@ def draw_with_location(graph):
 def build_partition(graph, mean):
     assignment = {}
     for y in graph.node():
-        if graph.node[y]['C_Y'] < mean:
+        if g.nodes[y]['C_Y'] < mean:
             assignment[y] = -1
         else:
             assignment[y] = 1
@@ -301,46 +301,5 @@ def distance_from_partition(graph, boundary_nodes):
             else:
                 dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[0])))
                 dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[1])))     
-        graph.node[node]["distance"] = dist
-    return graph
-def face_sierpinski_mesh(graph, special_faces):
-    #parameters: 
-    #graph: graph object that edges will be added to
-    #special_faces: list of faces that we want to add node/edges to
-    #k: integer depth parameter for depth of face refinement
-    max_label = max(list(graph.nodes()))
-    for face in special_faces:
-        graph.add_node(face)
-        neighbor_list = []
-        locations = []
-        connections = []
-        location = np.array([0,0]).astype("float64")
-        for v in face:
-            neighbor_list.append(v)
-            location += np.array(graph.nodes[v]["pos"]).astype("float64")
-        graph.nodes[face]["pos"] = location / len(face)
-        for w in face:
-            locations.append(graph.nodes[w]["pos"] - graph.nodes[face]["pos"])
-        angles = [float(np.arctan2(x[0], x[1])) for x in locations]
-        neighbor_list.sort(key=dict(zip(neighbor_list, angles)).get)
-        for v in range(0,len(neighbor_list)):
-            if v+1 < len(neighbor_list):
-                distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[v+1]]["pos"])
-                distance = distance * .5
-                label = max_label + 1
-                max_label += 1
-            else:
-                distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[0]]["pos"])
-                distance = distance * .5
-                label = max_label + 10
-                max_label += 10
-            graph.add_node(label)
-            graph.node[label]['pos'] = distance
-            connections.append(label)
-        for v in range(0,len(connections)):
-            if v+1 < len(connections):
-                graph.add_edge(connections[v],connections[v+1])
-            else:
-                graph.add_edge(connections[v],connections[0])
-        graph.remove_node(face)
+        graph.nodes[node]["distance"] = dist
     return graph
