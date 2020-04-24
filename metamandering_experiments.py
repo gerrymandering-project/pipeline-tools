@@ -89,11 +89,19 @@ def special_faces(graph, k):
     return special_faces
 
 
-<<<<<<< HEAD:metandering_experiments.py
-=======
-   
+def remove_undirected_edge(graph, v, u):
+    if (v,u) in graph.edges():
+        graph.remove_edge(v,u)
+        return 
+    
+    if (u,v) in graph.edges():
+        graph.remove_edge(u,v)
+        return 
+    
+    #print("nodes ", v, ",", u, " not connected in graph")
 
-def face_serpinsky_mesh(graph, special_faces):
+
+def face_sierpinski_mesh(graph, special_faces):
     #parameters: 
     #graph: graph object that edges will be added to
     #special_faces: list of faces that we want to add node/edges to
@@ -114,18 +122,16 @@ def face_serpinsky_mesh(graph, special_faces):
         angles = [float(np.arctan2(x[0], x[1])) for x in locations]
         neighbor_list.sort(key=dict(zip(neighbor_list, angles)).get)
         for v in range(0,len(neighbor_list)):
-            if v+1 < len(neighbor_list):
-                distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[v+1]]["pos"])
-                distance = distance * .5
-                label = max_label + 1
-                max_label += 1
-            else:
-                distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[0]]["pos"])
-                distance = distance * .5
-                label = max_label + 10
-                max_label += 10
+            next_index = (v+1) % len(neighbor_list)
+            distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[next_index]]["pos"])
+            distance = distance * .5
+            label = max_label + 1
+            max_label += 1
             graph.add_node(label)
             graph.nodes[label]['pos'] = distance
+            remove_undirected_edge(graph, neighbor_list[v], neighbor_list[next_index])
+            graph.add_edge(neighbor_list[v],label)
+            graph.add_edge(label,neighbor_list[next_index])
             connections.append(label)
         for v in range(0,len(connections)):
             if v+1 < len(connections):
@@ -134,7 +140,6 @@ def face_serpinsky_mesh(graph, special_faces):
                 graph.add_edge(connections[v],connections[0])
         graph.remove_node(face)
     return graph
->>>>>>> 59cec8e1f483220b0600a6075e4b8fee9acc9ac5:metamandering_experiments.py
 
 def cut_accept(partition):
     bound = 1
@@ -183,73 +188,95 @@ for edge in dual.edges:
 dual = distance_from_partition(dual, dual_crosses)
 
 special_faces = special_faces(dual,2)
-g_sierpinski = face_sierpinski_mesh(g, special_faces)
+g_sierpinsky = face_sierpinski_mesh(g, special_faces)
 
 
-for node in g_serpinsky:
-    g_serpinsky.nodes[node]['C_X'] = g_serpinsky.nodes[node]['pos'][0]
-    g_serpinsky.nodes[node]['C_Y'] = g_serpinsky.nodes[node]['pos'][1]
-    if 'population' not in g_serpinsky.nodes[node]:
-        g_serpinsky.nodes[node]['population'] = 0
+for node in g_sierpinsky:
+    g_sierpinsky.nodes[node]['C_X'] = g_sierpinsky.nodes[node]['pos'][0]
+    g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
+    if 'population' not in g_sierpinsky.nodes[node]:
+        g_sierpinsky.nodes[node]['population'] = 0
 
 print("creating partition")
 
-total_pop = sum( [ g_serpinsky.nodes[node]['population'] for node in g_serpinsky])
+total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
 
-serp_partition = build_trivial_partition(g_serpinsky)
+sierp_partition = build_trivial_partition(g_sierpinsky)
 
 print("created partition")
 
 plt.figure()
-nx.draw(g_sierpinski, pos=nx.get_node_attributes(g_sierpinski, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
-plt.savefig("./plots/Serpinsky_mesh.eps", format='eps')
+nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
+plt.savefig("./plots/sierpinsky_mesh.eps", format='eps')
 plt.close()
 
-for edge in g_sierpinski.edges():
-    g_sierpinski[edge[0]][edge[1]]['cut_times'] = 0
+for edge in g_sierpinsky.edges():
+    g_sierpinsky[edge[0]][edge[1]]['cut_times'] = 0
 
-<<<<<<< HEAD:metandering_experiments.py
-    for n in g_sierpinski.nodes():
-        g_sierpinski.node[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
-        g_sierpinski.node[n]["last_flipped"] = 0
-        g_sierpinski.node[n]["num_flips"] = 0
-=======
-    for n in g_serpinsky.nodes():
-        g_serpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
-        g_serpinsky.nodes[n]["last_flipped"] = 0
-        g_serpinsky.nodes[n]["num_flips"] = 0
->>>>>>> 59cec8e1f483220b0600a6075e4b8fee9acc9ac5:metamandering_experiments.py
-pop1 = .05
+    for n in g_sierpinsky.nodes():
+        g_sierpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
+        g_sierpinsky.nodes[n]["last_flipped"] = 0
+        g_sierpinsky.nodes[n]["num_flips"] = 0
+pop1 = 1
 
 base = 1          
 
 
+def my_mst_bipartition_tree_random(
+    graph,
+    pop_col,
+    pop_target,
+    epsilon,
+    node_repeats=1,
+    spanning_tree=None,
+    choice=random.choice):
+    populations = {node: graph.nodes[node][pop_col] for node in graph}
+
+    possible_cuts = []
+    if spanning_tree is None:
+        spanning_tree = get_spanning_tree_mst(graph)
+
+    while len(possible_cuts) == 0:
+        spanning_tree = get_spanning_tree_mst(graph)
+        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
+        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
+
+    return choice(possible_cuts).subset
+
+
 
 popbound = within_percent_of_ideal_population(partition_y, pop1)
-ideal_population = sum(serp_partition["population"].values()) / len(partition_y)
+ideal_population = sum(sierp_partition["population"].values()) / len(partition_y)
+print(ideal_population)
 
-tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon=0.05,node_repeats=1)
+tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
 steps = 1000
 
-exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), accept=True, initial_state=serp_partition,
+exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), accept=True, initial_state=sierp_partition,
                                         total_steps=steps)
 z = 0
 num_cuts_list = []
+
+tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                                                    node_repeats=1, method=my_mst_bipartition_tree_random)
+            
+exp_chain = MarkovChain(tree_proposal,
+                                                    Validator([  # ,boundary_condition
+                                                               ]), accept=cut_accept, initial_state=sierp_partition,
+                                                    total_steps=steps)
+
+
 for part in exp_chain:
     z += 1
     print("step ", z)
 
     for edge in part["cut_edges"]:
-<<<<<<< HEAD:metandering_experiments.py
-        g_sierpinski[edge[0]][edge[1]]["cut_times"] += 1
-=======
-        g_serpinsky[edge[0]][edge[1]]["cut_times"] += 1
+        g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
     print("finished round")
->>>>>>> 59cec8e1f483220b0600a6075e4b8fee9acc9ac5:metamandering_experiments.py
 
 plt.figure()
-nx.draw(g_sierpinski, pos={x: x for x in g_sierpinski.nodes()}, node_color=[0 for x in g_sierpinski.nodes()], node_size=1,
-                    edge_color=[g_sierpinski[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinski.edges()], node_shape='s',
+nx.draw(g_sierpinsky, pos={x: x for x in g_sierpinsky.nodes()}, node_color=[0 for x in g_sierpinsky.nodes()], node_size=1,
+                    edge_color=[g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()], node_shape='s',
                     cmap='magma', width=3)
 plt.savefig("./plots/edges.eps", format='eps')
 plt.close()
