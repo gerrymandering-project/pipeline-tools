@@ -475,7 +475,7 @@ def test_and_find_left_right_manders(graph):
  
     
 def metamander_experiment():
-    which_map = 2
+    which_map = 0
 
     graph, dual = preprocessing(which_map)
     
