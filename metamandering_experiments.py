@@ -63,6 +63,24 @@ def build_trivial_partition(graph):
                         }
     partition = Partition(graph, assignment=assignment, updaters=updaters)
     return partition
+
+def build_balanced_partition(graph, pop_col, pop_target, epsilon):
+    
+    block = bpt(graph, pop_col, pop_target, epsilon)
+    assignment = {}
+    for y in graph.nodes():
+        if y in block:
+            assignment[y] = 1
+        else:
+            assignment[y] = -1
+    first_node = list(graph.nodes())[0]
+    assignment[first_node] = -1
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
+    partition = Partition(graph, assignment=assignment, updaters=updaters)
+    return partition
     
     
 
@@ -197,13 +215,9 @@ for node in g_sierpinsky:
     if 'population' not in g_sierpinsky.nodes[node]:
         g_sierpinsky.nodes[node]['population'] = 0
 
-print("creating partition")
-
 total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
 
-sierp_partition = build_trivial_partition(g_sierpinsky)
-
-print("created partition")
+#sierp_partition = build_trivial_partition(g_sierpinsky)
 
 plt.figure()
 nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
@@ -220,6 +234,9 @@ for edge in g_sierpinsky.edges():
 pop1 = 1
 
 base = 1          
+
+
+sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
 
 
 def get_spanning_tree_mst(graph):
