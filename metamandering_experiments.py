@@ -8,6 +8,8 @@ import matplotlib
 from facefinder import *
 from graph_tools import *
 
+import graph_tools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import csv
@@ -81,10 +83,15 @@ def build_balanced_partition(graph, pop_col, pop_target, epsilon):
     return partition
 
 
-def build_balanced_k_partition(graph, pop_col, pop_target, epsilon):
+def build_balanced_k_partition(graph, k, pop_col, pop_target, epsilon):
     
-    
-    return 0
+    assignment = recursive_tree_part(graph, k, pop_target, pop_col, epsilon)
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
+    partition = Partition(graph, assignment=assignment, updaters=updaters)
+    return partition
     
     
 
@@ -194,9 +201,16 @@ vertical = []
 for node in g.nodes():
     g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
     vertical.append(g.nodes[node]["C_Y"])
+    g.nodes[node]["population"] = 1
 mean_y_coord = sum(vertical) / len(vertical)
 
-partition_y = build_partition_meta(g,mean_y_coord)
+k = 4
+##Number of Partitions Goes Here
+
+
+ideal_population = sum( g.nodes[x]["population"] for x in g.nodes())/k
+partition_y = build_balanced_k_partition(g, list(range(k)), "population", ideal_population, .05)
+
 
 crosses = compute_cross_edge(g, partition_y)
 
@@ -210,6 +224,7 @@ dual = distance_from_partition(dual, dual_crosses)
 special_faces = special_faces(dual,2)
 g_sierpinsky = face_sierpinski_mesh(g, special_faces)
 
+print("made metamander")
 
 for node in g_sierpinsky:
     g_sierpinsky.nodes[node]['C_X'] = g_sierpinsky.nodes[node]['pos'][0]
@@ -238,20 +253,13 @@ pop1 = 1
 base = 1          
 
 
-edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
-
-pos=nx.get_node_attributes(g_sierpinsky, 'pos')
-
-plt.figure()
-nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
-                    edge_color=edge_colors, node_shape='s',
-                    cmap='magma', width=3)
+#sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
 
 
-sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
 
+ideal_population= sum( g_sierpinsky.nodes[x]["population"] for x in g_sierpinsky.nodes())/k
+sierp_partition = build_balanced_k_partition(g_sierpinsky, list(range(k)), "population", ideal_population, .05)
 viz(g_sierpinsky, set([]), sierp_partition.parts)
-
 
 def get_spanning_tree_mst(graph):
     for edge in graph.edges:
