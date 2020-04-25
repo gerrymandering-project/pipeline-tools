@@ -240,11 +240,11 @@ def smooth_node(graph, v):
     return graph
 
 def preprocessing():
-    link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json"
+    #link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json"
     
     #link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json"
     
-    #link = "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"
+    link = "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"
     g = graph_from_url_processing(link)
     
     
@@ -299,7 +299,7 @@ g, dual = preprocessing()
 # Quick vertical partition, use for initial partition
 
 
-k = 4
+k = 7
 ##Number of Partitions Goes Here
 
 print("making initial partition")
@@ -333,7 +333,11 @@ for node in g_sierpinsky:
     g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
     if 'population' not in g_sierpinsky.nodes[node]:
         g_sierpinsky.nodes[node]['population'] = 0
-
+    if 'RVAP' not in g_sierpinsky.nodes[node]:
+        g_sierpinsky.nodes[node]['RVAP'] = 0
+    if 'UVAP' not in g_sierpinsky.nodes[node]:
+        g_sierpinsky.nodes[node]['UVAP'] = 0
+    ##Need to add the voting data
 total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
 
 #sierp_partition = build_trivial_partition(g_sierpinsky)
@@ -388,17 +392,29 @@ z = 0
 num_cuts_list = []
 
 
+seats_won_table = []
 for part in exp_chain:
 
 #for i in range(steps):
 #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
 
-
+    seats_won = 0
     z += 1
     print("step ", z)
 
     for edge in part["cut_edges"]:
         g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
+
+    for i in range(k):
+        rural_pop = 0
+        urban_pop = 0
+        for n in g.nodes():
+            if part.assignment[n] == i:
+                rural_pop += g.nodes[n]["RVAP"]
+                urban_pop += g.nodes[n]["UVAP"]
+        total_seats = int(rural_pop > urban_pop)
+        seats_won += total_seats
+    seats_won_table.append(seats_won)
     #print("finished round")
 
 
@@ -411,4 +427,11 @@ nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size
                     edge_color=edge_colors, node_shape='s',
                     cmap='magma', width=3)
 plt.savefig("./plots/edges.png")
+plt.close()
+
+plt.figure()
+plt.hist(seats_won_table, bins = 10)
+import time
+name = "./plots/seats_histogram" + str(int(time.time())) +".png"
+plt.savefig(name)
 plt.close()
