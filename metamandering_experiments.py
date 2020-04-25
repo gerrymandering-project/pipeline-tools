@@ -186,13 +186,26 @@ def step_num(partition):
                 return parent["step_num"] + 1
 # Experiement setup
 link = "https://people.csail.mit.edu/ddeford//COUNTY/COUNTY_13.json"
+
+#link = "https://people.csail.mit.edu/ddeford/TRACT/TRACT_55.json"
 g = graph_from_url_processing(link)
 
-dual = restricted_planar_dual(g)
 
+#Have to remove bad nodes in order for the duality thing to work
+
+bad_nodes = []
+for v in g:
+    if g.degree(v) == 1 or g.degree(v) == 2:
+        bad_nodes.append(v)
+        
+g.remove_nodes_from(bad_nodes)
+
+print("making dual")
+dual = restricted_planar_dual(g)
+print("made dual")
 plt.figure()
 nx.draw(g, pos=nx.get_node_attributes(g, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
-plt.savefig("./plots/UnderlyingGraph.eps", format='eps')
+plt.savefig("./plots/UnderlyingGraph.png", format='png')
 plt.close()
 
 # Quick vertical partition, use for initial partition
@@ -207,23 +220,24 @@ mean_y_coord = sum(vertical) / len(vertical)
 k = 4
 ##Number of Partitions Goes Here
 
-
+print("making initial partition")
 ideal_population = sum( g.nodes[x]["population"] for x in g.nodes())/k
 partition_y = build_balanced_k_partition(g, list(range(k)), "population", ideal_population, .05)
 
-
+print("made partition")
 crosses = compute_cross_edge(g, partition_y)
 
 dual_crosses = []
 for edge in dual.edges:
     if dual.edges[edge]["original_name"] in crosses:
         dual_crosses.append(edge)
-
+        
+print("making dual distances")
 dual = distance_from_partition(dual, dual_crosses)
-
+print('finished making dual distances')
 special_faces = special_faces(dual,2)
+print('finished assigning special faces')
 g_sierpinsky = face_sierpinski_mesh(g, special_faces)
-
 print("made metamander")
 
 for node in g_sierpinsky:
