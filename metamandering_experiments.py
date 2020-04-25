@@ -296,7 +296,7 @@ def preprocessing(which_map):
     return graph, dual
 
 
-def produce_sample(graph, k, tag, sample_size = 200):
+def produce_sample(graph, k, tag, sample_size = 500):
     #Samples k partitions of the graph, stores the cut edges and records them graphically
     #Also stores vote histograms, and returns most extreme partitions.
     for edge in graph.edges():
@@ -463,7 +463,7 @@ def metamander_around_partition(graph, dual, target_partition, tag):
 
 def test_and_find_left_right_manders(graph):
 
-    k = 7
+    k = 6
     tag = "state_map" + str(which_map) + "trial_num" + str(trial)
     ##Number of Partitions Goes Here
     
@@ -493,4 +493,4 @@ def metamander_experiment():
     #graph, dual = preprocessing(which_map)
     metamander_around_partition(graph, dual, right_mander, "RIGHTMANDER")
     
-    
+metamander_experiment()
