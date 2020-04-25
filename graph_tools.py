@@ -270,10 +270,12 @@ def viz(graph, edge_set, partition):
     values = [1 - int(x in edge_set) for x in graph.edges()]
     color_dictionary = {}
     for x in graph.nodes():
-        if x in partition[-1]:
-            color_dictionary[x] = 1
-        else:
-            color_dictionary[x] = 2
+        color = 0
+        for block in partition.keys():
+            if x in partition[block]:
+                color_dictionary[x] = color
+            color += 1
+        
     node_values = [color_dictionary[x] for x in graph.nodes()]
     f = plt.figure()
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values, edge_color = values, width = 4, node_size= 65, font_size = 7)
@@ -284,8 +286,7 @@ def compute_cross_edge(graph,partition):
         if Partition.crosses_parts(partition,n):
             cross_list.append(n)
     return cross_list
-
-def distance_from_partition(graph, boundary_nodes):
+def distance_from_partition(graph, boundary_edges):
 #General Idea:
 #Goal: Given any face of the original graph, want to calculate its distance to the boundary of the partition.
 #Method: Treat that face as a vertex v of the dual graph D, and then (using above) treat the boundary of the partition of a set of vertices S of the dual graph. 
@@ -293,13 +294,17 @@ def distance_from_partition(graph, boundary_nodes):
 #d = infinity
 #For each s in S:
  #    d = min ( distance_in_D(v,s), d)
+    boundary_nodes = set( [x[0] for x in boundary_edges] + [x[1] for x in boundary_edges] )
     for node in graph.nodes():
-        dist = 100000000
-        for bound in boundary_nodes:
-            if node in boundary_nodes:
-                dist = 0
-            else:
-                dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[0])))
-                dist = min(dist, len(nx.shortest_path(graph, source = node, target = bound[1])))     
-        graph.nodes[node]["distance"] = dist
+        if node in boundary_nodes:
+            graph.nodes[node]["distance"] = 0
+        else:
+            graph.nodes[node]["distance"] = np.inf
+    for step in range(len(graph.nodes())):
+        for node in graph.nodes():
+            neighbor_distance = min([graph.nodes[x]["distance"] for x in graph.neighbors(node)]) + 1
+            new_distance = min(neighbor_distance, graph.nodes[node]["distance"])
+            graph.nodes[node]["distance"] = new_distance
+            
+
     return graph
