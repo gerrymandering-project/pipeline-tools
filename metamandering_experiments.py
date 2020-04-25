@@ -303,7 +303,7 @@ def produce_sample(graph, k, tag, sample_size = 500):
         graph[edge[0]][edge[1]]['cut_times'] = 0
     
         for n in graph.nodes():
-            #graph.nodes[n]["population"] = graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
+            #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
             graph.nodes[n]["last_flipped"] = 0
             graph.nodes[n]["num_flips"] = 0
     
@@ -355,7 +355,9 @@ def produce_sample(graph, k, tag, sample_size = 500):
     
         seats_won = 0
         z += 1
-        print("step ", z)
+        
+        if z % 100 == 0:
+            print("step ", z)
     
         for edge in part["cut_edges"]:
             graph[edge[0]][edge[1]]["cut_times"] += 1
@@ -483,14 +485,15 @@ def metamander_experiment():
     
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
+
     
-    metamander_around_partition(graph, dual, left_mander, "LEFTMANDER")
+    metamander_around_partition(graph, dual, left_mander, tag + "LEFTMANDER")
     
     graph = hold_graph
     dual = hold_dual
     ##This should work but doesn't seem to have to call preprocessing again... 
     #probably because of dual
-    #graph, dual = preprocessing(which_map)
-    metamander_around_partition(graph, dual, right_mander, "RIGHTMANDER")
+    graph, dual = preprocessing(which_map)
+    metamander_around_partition(graph, dual, right_mander, tag + "RIGHTMANDER")
     
 metamander_experiment()
