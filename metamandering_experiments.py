@@ -19,6 +19,7 @@ import seaborn as sns
 from functools import partial
 import networkx as nx
 import numpy as np
+import copy
 
 import seannas_code
 
@@ -244,7 +245,7 @@ def preprocessing(which_map):
 
     
     link = maps[which_map]
-    g = graph_from_url_processing(link)
+    graph = graph_from_url_processing(link)
     
     
     #Have to remove bad nodes in order for the duality thing to work properly
@@ -253,189 +254,205 @@ def preprocessing(which_map):
     cleanup = True
     while cleanup:
         print("clean up phase")
-        print(len(g))
+        print(len(graph))
         deg_one_nodes = []
-        for v in g.nodes():
-            if g.degree(v) == 1:
+        for v in graph.nodes():
+            if graph.degree(v) == 1:
                 deg_one_nodes.append(v)
-        g.remove_nodes_from(deg_one_nodes)
+        graph.remove_nodes_from(deg_one_nodes)
         
         deg_2_nodes = []
-        for v in g.nodes():
-            if g.degree(v) == 2:
+        for v in graph.nodes():
+            if graph.degree(v) == 2:
                 deg_2_nodes.append(v)
     
         for v in deg_2_nodes:
-            g = smooth_node(g, v)    
+            graph = smooth_node(graph, v)    
         
         bad_nodes = []
-        for v in g.nodes():
-            if g.degree(v) == 1 or g.degree(v) == 2:
+        for v in graph.nodes():
+            if graph.degree(v) == 1 or graph.degree(v) == 2:
                 bad_nodes.append(v)
         if len(bad_nodes) > 0:
             cleanup = True
         else:
             cleanup = False
         
-    print(len(g))
+    print(len(graph))
     print("making dual")
-    dual = restricted_planar_dual(g)
+    dual = restricted_planar_dual(graph)
     print("made dual")
     plt.figure()
-    nx.draw(g, pos=nx.get_node_attributes(g, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
+    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
     plt.savefig("./plots/UnderlyingGraph.png", format='png')
     plt.close()
     
     
-    for node in g.nodes():
-        g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
-        g.nodes[node]["population"] = g.nodes[node]["POP10"]
+    for node in graph.nodes():
+        graph.nodes[node]["pos"] = [graph.nodes[node]["C_X"], graph.nodes[node]["C_Y"]]
+        graph.nodes[node]["population"] = graph.nodes[node]["POP10"]
 
 
-    return g, dual
+    return graph, dual
 
 
-which_map = 2
-g, dual = preprocessing(which_map)
-# Quick vertical partition, use for initial partition
 
 
-for trial in range(10):
-    
-    k = 7
-    tag = "trial_num" + str(trial) + "state_map" + str(which_map)
-    ##Number of Partitions Goes Here
-    
-    print("making initial partition")
-    ideal_population = sum( g.nodes[x]["population"] for x in g.nodes())/k
-    partition_y = build_balanced_k_partition(g, list(range(k)), "population", ideal_population, .05)
-    
-    plt.figure()
-    
-    viz(g, set([]), partition_y.parts)
-    plt.savefig("./plots/target_map" + tag + ".png", format = 'png')
-    plt.close()
-    
-    print("made partition")
-    crosses = compute_cross_edge(g, partition_y)
-    
-    dual_crosses = []
-    for edge in dual.edges:
-        if dual.edges[edge]["original_name"] in crosses:
-            dual_crosses.append(edge)
-            
-    print("making dual distances")
-    dual = distance_from_partition(dual, dual_crosses)
-    print('finished making dual distances')
-    special_faces = assign_special_faces(dual,2)
-    print('finished assigning special faces')
-    g_sierpinsky = face_sierpinski_mesh(g, special_faces)
-    print("made metamander")
-    
-    for node in g_sierpinsky:
-        g_sierpinsky.nodes[node]['C_X'] = g_sierpinsky.nodes[node]['pos'][0]
-        g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
-        if 'population' not in g_sierpinsky.nodes[node]:
-            g_sierpinsky.nodes[node]['population'] = 0
-        if 'RVAP' not in g_sierpinsky.nodes[node]:
-            g_sierpinsky.nodes[node]['RVAP'] = 0
-        if 'UVAP' not in g_sierpinsky.nodes[node]:
-            g_sierpinsky.nodes[node]['UVAP'] = 0
-        ##Need to add the voting data
-    total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
-    
-    #sierp_partition = build_trivial_partition(g_sierpinsky)
-    
-    plt.figure()
-    nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
-    plt.savefig("./plots/sierpinsky_mesh.eps", format='eps')
-    plt.close()
-    
-    for edge in g_sierpinsky.edges():
-        g_sierpinsky[edge[0]][edge[1]]['cut_times'] = 0
-    
-        for n in g_sierpinsky.nodes():
-            g_sierpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
-            g_sierpinsky.nodes[n]["last_flipped"] = 0
-            g_sierpinsky.nodes[n]["num_flips"] = 0
-    
-    #sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
+def test_and_find_left_right_manders():
+    which_map = 2
+    graph, dual = preprocessing(which_map)
+    # Quick vertical partition, use for initial partition
     
     
+    for trial in range(1):
+        
+        k = 7
+        tag = "state_map" + str(which_map) + "trial_num" + str(trial)
+        ##Number of Partitions Goes Here
+        
+        print("making initial partition")
+        ideal_population = sum( graph.nodes[x]["population"] for x in graph.nodes())/k
+        partition_y = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .05)
+        
+        plt.figure()
+        
+        viz(graph, set([]), partition_y.parts)
+        plt.savefig("./plots/target_map" + tag + ".png", format = 'png')
+        plt.close()
+        
+        print("made partition")
+        crosses = compute_cross_edge(graph, partition_y)
+        
+        dual_crosses = []
+        for edge in dual.edges:
+            if dual.edges[edge]["original_name"] in crosses:
+                dual_crosses.append(edge)
+                
+        print("making dual distances")
+        dual = distance_from_partition(dual, dual_crosses)
+        print('finished making dual distances')
+        special_faces = assign_special_faces(dual,2)
+        print('finished assigning special faces')
+        g_sierpinsky = face_sierpinski_mesh(graph, special_faces)
+        print("made metamander")
+        
+        for node in g_sierpinsky:
+            g_sierpinsky.nodes[node]['C_X'] = g_sierpinsky.nodes[node]['pos'][0]
+            g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
+            if 'population' not in g_sierpinsky.nodes[node]:
+                g_sierpinsky.nodes[node]['population'] = 0
+            if 'RVAP' not in g_sierpinsky.nodes[node]:
+                g_sierpinsky.nodes[node]['RVAP'] = 0
+            if 'UVAP' not in g_sierpinsky.nodes[node]:
+                g_sierpinsky.nodes[node]['UVAP'] = 0
+            ##Need to add the voting data
+        total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
+        
+        #sierp_partition = build_trivial_partition(g_sierpinsky)
+        
+        plt.figure()
+        nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
+        plt.savefig("./plots/sierpinsky_mesh.eps", format='eps')
+        plt.close()
+        
+        for edge in g_sierpinsky.edges():
+            g_sierpinsky[edge[0]][edge[1]]['cut_times'] = 0
+        
+            for n in g_sierpinsky.nodes():
+                g_sierpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
+                g_sierpinsky.nodes[n]["last_flipped"] = 0
+                g_sierpinsky.nodes[n]["num_flips"] = 0
+        
+        #sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
+        
+        
+        
+        ideal_population= sum( g_sierpinsky.nodes[x]["population"] for x in g_sierpinsky.nodes())/k
+        sierp_partition = build_balanced_k_partition(g_sierpinsky, list(range(k)), "population", ideal_population, .05)
+        #viz(g_sierpinsky, set([]), sierp_partition.parts)
+        pop1 = .1
+        
+        
+        popbound = within_percent_of_ideal_population(sierp_partition, pop1)
+        #ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
+        print(ideal_population)
+        
+        tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
+        steps = 200
+        
+        
+        chaintype = "tree"
+        
+        if chaintype == "tree":
+            tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                                    node_repeats=1, method=my_mst_bipartition_tree_random)
+        
+        if chaintype == "uniform_tree":
+            tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                                    node_repeats=1, method=my_uu_bipartition_tree_random)
+        
+        
+        
+        exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=sierp_partition, total_steps=steps)
+        
+        
+        z = 0
+        num_cuts_list = []
+        
+        
+        seats_won_table = []
+        left_manders = []
+        right_manders = []
+        
+        for part in exp_chain:
+        
+        #for i in range(steps):
+        #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
+        
+            seats_won = 0
+            z += 1
+            print("step ", z)
+        
+            for edge in part["cut_edges"]:
+                g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
+        
+            for i in range(k):
+                rural_pop = 0
+                urban_pop = 0
+                for n in graph.nodes():
+                    if part.assignment[n] == i:
+                        rural_pop += graph.nodes[n]["RVAP"]
+                        urban_pop += graph.nodes[n]["UVAP"]
+                total_seats = int(rural_pop > urban_pop)
+                seats_won += total_seats
+            seats_won_table.append(seats_won)
+            if seats_won == 0:
+                left_manders.append(copy.deepcopy(part.parts))
+            if seats_won == 3:
+                right_manders.append(copy.deepcopy(part.parts))
+            #print("finished round"
+        
+        
+        edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
+        
+        pos=nx.get_node_attributes(g_sierpinsky, 'pos')
+        
+        plt.figure()
+        nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
+                            edge_color=edge_colors, node_shape='s',
+                            cmap='magma', width=3)
+        plt.savefig("./plots/edges" + tag + ".png")
+        plt.close()
+        
+        plt.figure()
+        plt.hist(seats_won_table, bins = 10)
+        
+        name = "./plots/seats_histogram" + tag +".png"
+        plt.savefig(name)
+        plt.close()
+
+    return left_manders, right_manders 
+def metamander_around_partition(graph, dual, partition):
     
-    ideal_population= sum( g_sierpinsky.nodes[x]["population"] for x in g_sierpinsky.nodes())/k
-    sierp_partition = build_balanced_k_partition(g_sierpinsky, list(range(k)), "population", ideal_population, .05)
-    #viz(g_sierpinsky, set([]), sierp_partition.parts)
-    pop1 = .1
+    return 0
     
-    
-    popbound = within_percent_of_ideal_population(sierp_partition, pop1)
-    #ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
-    print(ideal_population)
-    
-    tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
-    steps = 200
-    
-    
-    chaintype = "tree"
-    
-    if chaintype == "tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_mst_bipartition_tree_random)
-    
-    if chaintype == "uniform_tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_uu_bipartition_tree_random)
-    
-    
-    
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=sierp_partition, total_steps=steps)
-    
-    
-    z = 0
-    num_cuts_list = []
-    
-    
-    seats_won_table = []
-    for part in exp_chain:
-    
-    #for i in range(steps):
-    #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
-    
-        seats_won = 0
-        z += 1
-        print("step ", z)
-    
-        for edge in part["cut_edges"]:
-            g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
-    
-        for i in range(k):
-            rural_pop = 0
-            urban_pop = 0
-            for n in g.nodes():
-                if part.assignment[n] == i:
-                    rural_pop += g.nodes[n]["RVAP"]
-                    urban_pop += g.nodes[n]["UVAP"]
-            total_seats = int(rural_pop > urban_pop)
-            seats_won += total_seats
-        seats_won_table.append(seats_won)
-        #print("finished round")
-    
-    
-    edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
-    
-    pos=nx.get_node_attributes(g_sierpinsky, 'pos')
-    
-    plt.figure()
-    nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
-                        edge_color=edge_colors, node_shape='s',
-                        cmap='magma', width=3)
-    plt.savefig("./plots/edges" + tag + ".png")
-    plt.close()
-    
-    plt.figure()
-    plt.hist(seats_won_table, bins = 10)
-    
-    name = "./plots/seats_histogram" + tag +".png"
-    plt.savefig(name)
-    plt.close()
