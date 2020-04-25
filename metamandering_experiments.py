@@ -298,9 +298,14 @@ for i in range(steps):
         g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
     print("finished round")
 
+
+edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
+
+pos=nx.get_node_attributes(g_sierpinsky, 'pos')
+
 plt.figure()
-nx.draw(g_sierpinsky, pos={x: x for x in g_sierpinsky.nodes()}, node_color=[0 for x in g_sierpinsky.nodes()], node_size=1,
-                    edge_color=[g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()], node_shape='s',
+nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
+                    edge_color=edge_colors, node_shape='s',
                     cmap='magma', width=3)
 plt.savefig("./plots/edges.eps", format='eps')
 plt.close()
