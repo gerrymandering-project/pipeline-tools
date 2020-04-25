@@ -184,38 +184,102 @@ def step_num(partition):
                     return 0
 
                 return parent["step_num"] + 1
+            
+            
+def get_spanning_tree_mst(graph):
+    for edge in graph.edges:
+        graph.edges[edge]["weight"] = random.random()
+
+    spanning_tree = nx.tree.maximum_spanning_tree(
+        graph, algorithm="kruskal", weight="weight"
+    )
+    return spanning_tree
+
+
+def my_mst_bipartition_tree_random(
+    graph,
+    pop_col,
+    pop_target,
+    epsilon,
+    node_repeats=1,
+    spanning_tree=None,
+    choice=random.choice):
+    populations = {node: graph.nodes[node][pop_col] for node in graph}
+
+    possible_cuts = []
+    if spanning_tree is None:
+        spanning_tree = get_spanning_tree_mst(graph)
+
+    while len(possible_cuts) == 0:
+        spanning_tree = get_spanning_tree_mst(graph)
+        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
+        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
+
+    return choice(possible_cuts).subset
+
+
+def always_true(proposal):
+    return True
+           
 # Experiement setup
-link = "https://people.csail.mit.edu/ddeford//COUNTY/COUNTY_13.json"
 
-#link = "https://people.csail.mit.edu/ddeford/TRACT/TRACT_55.json"
-g = graph_from_url_processing(link)
+def smooth_node(graph, v):
+    #print(v)
+    neighbors = list(graph.neighbors(v))
+    graph.remove_node(v)
+    try:
+        graph.add_edge(neighbors[0], neighbors[1])
+    except:
+        print(neighbors)
+    
+    return graph
 
-
-#Have to remove bad nodes in order for the duality thing to work
-
-bad_nodes = []
-for v in g:
-    if g.degree(v) == 1 or g.degree(v) == 2:
-        bad_nodes.append(v)
+def preprocessing():
+    link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json"
+    
+    link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json"
+    g = graph_from_url_processing(link)
+    
+    
+    #Have to remove bad nodes in order for the duality thing to work properly
+    
+    bad_nodes = []
+    for v in g.nodes():
+        if g.degree(v) == 1:
+            bad_nodes.append(v)
+    print(bad_nodes)
+    g.remove_nodes_from(bad_nodes)
+    
+    deg_2_nodes = []
+    for v in g.nodes():
+        if g.degree(v) == 2:
+            deg_2_nodes.append(v)
+            
+    print(deg_2_nodes)
+    for v in deg_2_nodes:
+        g = smooth_node(g, v)    
+        #Some weird bug here I don't understand
         
-g.remove_nodes_from(bad_nodes)
+    
+    print("making dual")
+    dual = restricted_planar_dual(g)
+    print("made dual")
+    plt.figure()
+    nx.draw(g, pos=nx.get_node_attributes(g, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
+    plt.savefig("./plots/UnderlyingGraph.png", format='png')
+    plt.close()
+    
+    
+    for node in g.nodes():
+        g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
+        g.nodes[node]["population"] = g.nodes[node]["POP10"]
 
-print("making dual")
-dual = restricted_planar_dual(g)
-print("made dual")
-plt.figure()
-nx.draw(g, pos=nx.get_node_attributes(g, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
-plt.savefig("./plots/UnderlyingGraph.png", format='png')
-plt.close()
 
+    return g, dual
+
+g, dual = preprocessing()
 # Quick vertical partition, use for initial partition
 
-vertical = []
-for node in g.nodes():
-    g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
-    vertical.append(g.nodes[node]["C_Y"])
-    g.nodes[node]["population"] = g.nodes[node]["POP10"]
-mean_y_coord = sum(vertical) / len(vertical)
 
 k = 4
 ##Number of Partitions Goes Here
@@ -223,6 +287,11 @@ k = 4
 print("making initial partition")
 ideal_population = sum( g.nodes[x]["population"] for x in g.nodes())/k
 partition_y = build_balanced_k_partition(g, list(range(k)), "population", ideal_population, .05)
+
+plt.figure()
+viz(g_sierpinsky, set([]), sierp_partition.parts)
+plt.savefig("./plots/target_map.png", format = 'png')
+plt.close()
 
 print("made partition")
 crosses = compute_cross_edge(g, partition_y)
@@ -262,10 +331,6 @@ for edge in g_sierpinsky.edges():
         g_sierpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
         g_sierpinsky.nodes[n]["last_flipped"] = 0
         g_sierpinsky.nodes[n]["num_flips"] = 0
-pop1 = 1
-
-base = 1          
-
 
 #sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
 
@@ -273,51 +338,16 @@ base = 1
 
 ideal_population= sum( g_sierpinsky.nodes[x]["population"] for x in g_sierpinsky.nodes())/k
 sierp_partition = build_balanced_k_partition(g_sierpinsky, list(range(k)), "population", ideal_population, .05)
-viz(g_sierpinsky, set([]), sierp_partition.parts)
-
-def get_spanning_tree_mst(graph):
-    for edge in graph.edges:
-        graph.edges[edge]["weight"] = random.random()
-
-    spanning_tree = nx.tree.maximum_spanning_tree(
-        graph, algorithm="kruskal", weight="weight"
-    )
-    return spanning_tree
+#viz(g_sierpinsky, set([]), sierp_partition.parts)
+pop1 = .1
 
 
-def my_mst_bipartition_tree_random(
-    graph,
-    pop_col,
-    pop_target,
-    epsilon,
-    node_repeats=1,
-    spanning_tree=None,
-    choice=random.choice):
-    populations = {node: graph.nodes[node][pop_col] for node in graph}
-
-    possible_cuts = []
-    if spanning_tree is None:
-        spanning_tree = get_spanning_tree_mst(graph)
-
-    while len(possible_cuts) == 0:
-        spanning_tree = get_spanning_tree_mst(graph)
-        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
-        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
-
-    return choice(possible_cuts).subset
-
-
-def always_true(proposal):
-    return True
 popbound = within_percent_of_ideal_population(sierp_partition, pop1)
-ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
+#ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
 print(ideal_population)
 
 tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
 steps = 200
-
-
-pop1 = .1
 
 
 chaintype = "tree"
