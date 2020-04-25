@@ -231,6 +231,11 @@ def smooth_node(graph, v):
         graph.add_edge(neighbors[0], neighbors[1])
     except:
         print(neighbors)
+        
+        
+    ##TODO : This can create parallel edges, which can result in degree 2 nodes 
+    #turning into degree 1 nodes after this smoothing. Those are ok, sicne they are just deleted
+    #But really we have to keep looping the clean up.
     
     return graph
 
@@ -238,29 +243,41 @@ def preprocessing():
     link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json"
     
     link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json"
+    
+    link = "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"
     g = graph_from_url_processing(link)
     
     
     #Have to remove bad nodes in order for the duality thing to work properly
     
-    bad_nodes = []
-    for v in g.nodes():
-        if g.degree(v) == 1:
-            bad_nodes.append(v)
-    print(bad_nodes)
-    g.remove_nodes_from(bad_nodes)
-    
-    deg_2_nodes = []
-    for v in g.nodes():
-        if g.degree(v) == 2:
-            deg_2_nodes.append(v)
-            
-    print(deg_2_nodes)
-    for v in deg_2_nodes:
-        g = smooth_node(g, v)    
-        #Some weird bug here I don't understand
+
+    cleanup = True
+    while cleanup:
+        print("clean up phase")
+        print(len(g))
+        deg_one_nodes = []
+        for v in g.nodes():
+            if g.degree(v) == 1:
+                deg_one_nodes.append(v)
+        g.remove_nodes_from(deg_one_nodes)
         
+        deg_2_nodes = []
+        for v in g.nodes():
+            if g.degree(v) == 2:
+                deg_2_nodes.append(v)
     
+        for v in deg_2_nodes:
+            g = smooth_node(g, v)    
+            
+        for v in g.nodes():
+            if g.degree(v) == 1 or g.degree(v) == 2:
+                bad_nodes.append(v)
+        if len(bad_nodes) > 0:
+            cleanup = True
+        else:
+            cleanup = False
+        
+    print(len(g))
     print("making dual")
     dual = restricted_planar_dual(g)
     print("made dual")
@@ -289,7 +306,8 @@ ideal_population = sum( g.nodes[x]["population"] for x in g.nodes())/k
 partition_y = build_balanced_k_partition(g, list(range(k)), "population", ideal_population, .05)
 
 plt.figure()
-viz(g_sierpinsky, set([]), sierp_partition.parts)
+
+viz(g, set([]), partition_y.parts)
 plt.savefig("./plots/target_map.png", format = 'png')
 plt.close()
 
