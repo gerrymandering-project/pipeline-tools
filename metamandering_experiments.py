@@ -73,8 +73,6 @@ def build_balanced_partition(graph, pop_col, pop_target, epsilon):
             assignment[y] = 1
         else:
             assignment[y] = -1
-    first_node = list(graph.nodes())[0]
-    assignment[first_node] = -1
     updaters = {'population': Tally('population'),
                         'cut_edges': cut_edges,
                         'step_num': step_num,
@@ -234,9 +232,19 @@ pop1 = 1
 base = 1          
 
 
+edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
+
+pos=nx.get_node_attributes(g_sierpinsky, 'pos')
+
+plt.figure()
+nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
+                    edge_color=edge_colors, node_shape='s',
+                    cmap='magma', width=3)
+
+
 sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
 
-viz(g_sierpinsky, set([]), part.parts)
+viz(g_sierpinsky, set([]), sierp_partition.parts)
 
 
 def get_spanning_tree_mst(graph):
@@ -296,7 +304,7 @@ for i in range(steps):
 
     for edge in part["cut_edges"]:
         g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
-    print("finished round")
+    #print("finished round")
 
 
 edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
@@ -307,5 +315,5 @@ plt.figure()
 nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
                     edge_color=edge_colors, node_shape='s',
                     cmap='magma', width=3)
-plt.savefig("./plots/edges.eps", format='eps')
+plt.savefig("./plots/edges.png")
 plt.close()
