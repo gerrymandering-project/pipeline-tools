@@ -66,7 +66,7 @@ def build_trivial_partition(graph):
 
 def build_balanced_partition(graph, pop_col, pop_target, epsilon):
     
-    block = bpt(graph, pop_col, pop_target, epsilon)
+    block = my_mst_bipartition_tree_random(graph, pop_col, pop_target, epsilon)
     assignment = {}
     for y in graph.nodes():
         if y in block:
@@ -194,8 +194,6 @@ mean_y_coord = sum(vertical) / len(vertical)
 
 partition_y = build_partition_meta(g,mean_y_coord)
 
-
-
 crosses = compute_cross_edge(g, partition_y)
 
 dual_crosses = []
@@ -238,6 +236,8 @@ base = 1
 
 sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
 
+viz(g_sierpinsky, set([]), part.parts)
+
 
 def get_spanning_tree_mst(graph):
     for edge in graph.edges:
@@ -277,7 +277,7 @@ ideal_population = sum(sierp_partition["population"].values()) / len(partition_y
 print(ideal_population)
 
 tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
-steps = 1000
+steps = 200
 
 exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), accept=True, initial_state=sierp_partition,
                                         total_steps=steps)
@@ -285,7 +285,12 @@ z = 0
 num_cuts_list = []
 
 
-for part in exp_chain:
+#for part in exp_chain:
+
+for i in range(steps):
+    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
+
+
     z += 1
     print("step ", z)
 
