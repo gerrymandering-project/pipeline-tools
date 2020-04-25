@@ -79,6 +79,12 @@ def build_balanced_partition(graph, pop_col, pop_target, epsilon):
                         }
     partition = Partition(graph, assignment=assignment, updaters=updaters)
     return partition
+
+
+def build_balanced_k_partition(graph, pop_col, pop_target, epsilon):
+    
+    
+    return 0
     
     
 
@@ -242,7 +248,7 @@ nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size
                     cmap='magma', width=3)
 
 
-sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
+sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
 
 viz(g_sierpinsky, set([]), sierp_partition.parts)
 
@@ -279,24 +285,42 @@ def my_mst_bipartition_tree_random(
     return choice(possible_cuts).subset
 
 
-
-popbound = within_percent_of_ideal_population(partition_y, pop1)
-ideal_population = sum(sierp_partition["population"].values()) / len(partition_y)
+def always_true(proposal):
+    return True
+popbound = within_percent_of_ideal_population(sierp_partition, pop1)
+ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
 print(ideal_population)
 
 tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
 steps = 200
 
-exp_chain = MarkovChain(tree_proposal, Validator([single_flip_contiguous]), accept=True, initial_state=sierp_partition,
-                                        total_steps=steps)
+
+pop1 = .1
+
+
+chaintype = "tree"
+
+if chaintype == "tree":
+    tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                            node_repeats=1, method=my_mst_bipartition_tree_random)
+
+if chaintype == "uniform_tree":
+    tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                            node_repeats=1, method=my_uu_bipartition_tree_random)
+
+
+
+exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=sierp_partition, total_steps=steps)
+
+
 z = 0
 num_cuts_list = []
 
 
-#for part in exp_chain:
+for part in exp_chain:
 
-for i in range(steps):
-    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
+#for i in range(steps):
+#    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
 
 
     z += 1
