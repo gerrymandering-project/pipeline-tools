@@ -242,9 +242,9 @@ def smooth_node(graph, v):
 def preprocessing():
     link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json"
     
-    link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json"
+    #link = "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json"
     
-    link = "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"
+    #link = "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"
     g = graph_from_url_processing(link)
     
     
@@ -268,7 +268,8 @@ def preprocessing():
     
         for v in deg_2_nodes:
             g = smooth_node(g, v)    
-            
+        
+        bad_nodes = []
         for v in g.nodes():
             if g.degree(v) == 1 or g.degree(v) == 2:
                 bad_nodes.append(v)
