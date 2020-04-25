@@ -312,7 +312,7 @@ def produce_sample(graph, k, tag, sample_size = 200):
     
     
     ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
-    initial_partition = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .05)
+    initial_partition = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .1)
     #viz(g_sierpinsky, set([]), sierp_partition.parts)
     pop1 = .1
     
@@ -378,7 +378,7 @@ def produce_sample(graph, k, tag, sample_size = 200):
             right_mander = copy.deepcopy(part.parts)
         #print("finished round"
     
-    print("max", best_right, "min:", best_min)
+    print("max", best_right, "min:", best_left)
     
     edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
     
