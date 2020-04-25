@@ -295,34 +295,6 @@ def preprocessing(which_map):
 
     return graph, dual
 
-def metamander_experiment():
-    which_map = 2
-
-    graph, dual = preprocessing(which_map)
-    
-    left_mander, right_mander = test_and_find_left_right_manders(graph)
-    
-    hold_graph = copy.deepcopy(graph)
-    
-    metamander_around_partition(graph, dual, left_mander, "LEFTMANDER")
-    
-    graph = hold_graph
-    metamander_around_partition(graph, dual, right_mander, "RIGHTMANDER")
-    
-    
-
-def test_and_find_left_right_manders(graph):
-
-  
-    k = 7
-    tag = "state_map" + str(which_map) + "trial_num" + str(trial)
-    ##Number of Partitions Goes Here
-    
-
-    left_mander, right_mander = produce_sample(graph, k, "finding")
-
-    
-    return left_mander, right_mander
 
 def produce_sample(graph, k, tag, sample_size = 200):
     #Samples k partitions of the graph, stores the cut edges and records them graphically
@@ -331,7 +303,7 @@ def produce_sample(graph, k, tag, sample_size = 200):
         graph[edge[0]][edge[1]]['cut_times'] = 0
     
         for n in graph.nodes():
-            graph.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
+            #graph.nodes[n]["population"] = graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
             graph.nodes[n]["last_flipped"] = 0
             graph.nodes[n]["num_flips"] = 0
     
@@ -406,13 +378,14 @@ def produce_sample(graph, k, tag, sample_size = 200):
             right_mander = copy.deepcopy(part.parts)
         #print("finished round"
     
+    print("max", best_right, "min:", best_min)
     
     edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
     
     pos=nx.get_node_attributes(graph, 'pos')
     
     plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
+    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=1,
                         edge_color=edge_colors, node_shape='s',
                         cmap='magma', width=3)
     plt.savefig("./plots/edges" + tag + ".png")
@@ -482,8 +455,42 @@ def metamander_around_partition(graph, dual, target_partition, tag):
     
     plt.figure()
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
-    plt.savefig("./plots/sierpinsky_mesh.eps", format='eps')
+    plt.savefig("./plots/sierpinsky_mesh.png", format='png')
     plt.close()
     
     left_mander, right_mander = produce_sample(g_sierpinsky, k , tag)
+   
+
+def test_and_find_left_right_manders(graph):
+
+    k = 7
+    tag = "state_map" + str(which_map) + "trial_num" + str(trial)
+    ##Number of Partitions Goes Here
+    
+
+    left_mander, right_mander = produce_sample(graph, k, "finding")
+
+    
+    return left_mander, right_mander
+ 
+    
+def metamander_experiment():
+    which_map = 2
+
+    graph, dual = preprocessing(which_map)
+    
+    left_mander, right_mander = test_and_find_left_right_manders(graph)
+    
+    hold_graph = copy.deepcopy(graph)
+    hold_dual = copy.deepcopy(dual)
+    
+    metamander_around_partition(graph, dual, left_mander, "LEFTMANDER")
+    
+    graph = hold_graph
+    dual = hold_dual
+    ##This should work but doesn't seem to have to call preprocessing again... 
+    #probably because of dual
+    #graph, dual = preprocessing(which_map)
+    metamander_around_partition(graph, dual, right_mander, "RIGHTMANDER")
+    
     
