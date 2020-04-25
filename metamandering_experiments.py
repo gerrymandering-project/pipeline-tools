@@ -201,7 +201,7 @@ vertical = []
 for node in g.nodes():
     g.nodes[node]["pos"] = [g.nodes[node]["C_X"], g.nodes[node]["C_Y"]]
     vertical.append(g.nodes[node]["C_Y"])
-    g.nodes[node]["population"] = 1
+    g.nodes[node]["population"] = g.nodes[node]["POP10"]
 mean_y_coord = sum(vertical) / len(vertical)
 
 k = 4
