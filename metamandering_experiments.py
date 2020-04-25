@@ -300,37 +300,153 @@ def metamander_experiment():
 
     graph, dual = preprocessing(which_map)
     
-    left_mander, right_mander = test_and_find_left_right_manders(graph, dual)
+    left_mander, right_mander = test_and_find_left_right_manders(graph)
+    
+    hold_graph = copy.deepcopy(graph)
     
     metamander_around_partition(graph, dual, left_mander, "LEFTMANDER")
-    metamander_around_partition(graph, dual, left_mander, "RIGHTMANDER")
+    
+    graph = hold_graph
+    metamander_around_partition(graph, dual, right_mander, "RIGHTMANDER")
     
     
 
-def test_and_find_left_right_manders(graph, dual):
+def test_and_find_left_right_manders(graph):
 
   
     k = 7
     tag = "state_map" + str(which_map) + "trial_num" + str(trial)
     ##Number of Partitions Goes Here
     
-    print("making initial partition")
-    ideal_population = sum( graph.nodes[x]["population"] for x in graph.nodes())/k
-    target_partition = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .05)    
+
+    left_mander, right_mander = produce_sample(graph, k, "finding")
+
+    
+    return left_mander, right_mander
+
+def produce_sample(graph, k, tag, sample_size = 200):
+    #Samples k partitions of the graph, stores the cut edges and records them graphically
+    #Also stores vote histograms, and returns most extreme partitions.
+    for edge in graph.edges():
+        graph[edge[0]][edge[1]]['cut_times'] = 0
+    
+        for n in graph.nodes():
+            graph.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
+            graph.nodes[n]["last_flipped"] = 0
+            graph.nodes[n]["num_flips"] = 0
+    
+    #sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
+    
+    
+    
+    ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
+    initial_partition = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .05)
+    #viz(g_sierpinsky, set([]), sierp_partition.parts)
+    pop1 = .1
+    
+    
+    popbound = within_percent_of_ideal_population(initial_partition, pop1)
+    #ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
+    print(ideal_population)
+    
+    tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
+    steps = sample_size
+    
+    
+    chaintype = "tree"
+    
+    if chaintype == "tree":
+        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                                node_repeats=1, method=my_mst_bipartition_tree_random)
+    
+    if chaintype == "uniform_tree":
+        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
+                                node_repeats=1, method=my_uu_bipartition_tree_random)
+    
+    
+    
+    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition, total_steps=steps)
+    
+    
+    z = 0
+    num_cuts_list = []
+    
+    
+    seats_won_table = []
+    best_left = np.inf
+    best_right = -np.inf
+    
+    for part in exp_chain:
+    
+    #for i in range(steps):
+    #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
+    
+        seats_won = 0
+        z += 1
+        print("step ", z)
+    
+        for edge in part["cut_edges"]:
+            graph[edge[0]][edge[1]]["cut_times"] += 1
+    
+        for i in range(k):
+            rural_pop = 0
+            urban_pop = 0
+            for n in graph.nodes():
+                if part.assignment[n] == i:
+                    rural_pop += graph.nodes[n]["RVAP"]
+                    urban_pop += graph.nodes[n]["UVAP"]
+            total_seats = int(rural_pop > urban_pop)
+            seats_won += total_seats
+        seats_won_table.append(seats_won)
+        if seats_won < best_left:
+            best_left = seats_won
+            left_mander = copy.deepcopy(part.parts)
+        if seats_won > best_right:
+            best_right = seats_won
+            right_mander = copy.deepcopy(part.parts)
+        #print("finished round"
+    
+    
+    edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
+    
+    pos=nx.get_node_attributes(graph, 'pos')
+    
+    plt.figure()
+    nx.draw(graph, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
+                        edge_color=edge_colors, node_shape='s',
+                        cmap='magma', width=3)
+    plt.savefig("./plots/edges" + tag + ".png")
+    plt.close()
+    
+    plt.figure()
+    plt.hist(seats_won_table, bins = 10)
+    
+    name = "./plots/seats_histogram" + tag +".png"
+    plt.savefig(name)
+    plt.close()    
+
+    return left_mander, right_mander
+
+def metamander_around_partition(graph, dual, target_partition, tag):
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
+    
+    assignment = {}
+    for x in graph.nodes():
+        color = 0
+        for block in target_partition.keys():
+            if x in target_partition[block]:
+                assignment[x] = color
+            color += 1
+    
+    target_partition = Partition(graph, assignment, updaters = updaters)
     plt.figure()
     
     viz(graph, set([]), target_partition.parts)
     plt.savefig("./plots/target_map" + tag + ".png", format = 'png')
     plt.close()
-
-    left_mander, right_mander = metamander_around_partition(graph, dual, target_partition)
-
-    return left_mander, right_manders
-
-
-def metamander_around_partition(graph, dual, target_partition, tag):
-
-    # Quick vertical partition, use for initial partition
     
     print("made partition")
     crosses = compute_cross_edge(graph, target_partition)
@@ -369,103 +485,5 @@ def metamander_around_partition(graph, dual, target_partition, tag):
     plt.savefig("./plots/sierpinsky_mesh.eps", format='eps')
     plt.close()
     
-    for edge in g_sierpinsky.edges():
-        g_sierpinsky[edge[0]][edge[1]]['cut_times'] = 0
-    
-        for n in g_sierpinsky.nodes():
-            g_sierpinsky.nodes[n]["population"] = 1 #This is something gerrychain will refer to for checking population balance
-            g_sierpinsky.nodes[n]["last_flipped"] = 0
-            g_sierpinsky.nodes[n]["num_flips"] = 0
-    
-    #sierp_partition = build_balanced_partition(g_sierpinsky, "population", ideal_population, .01)
-    
-    
-    
-    ideal_population= sum( g_sierpinsky.nodes[x]["population"] for x in g_sierpinsky.nodes())/k
-    sierp_partition = build_balanced_k_partition(g_sierpinsky, list(range(k)), "population", ideal_population, .05)
-    #viz(g_sierpinsky, set([]), sierp_partition.parts)
-    pop1 = .1
-    
-    
-    popbound = within_percent_of_ideal_population(sierp_partition, pop1)
-    #ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
-    print(ideal_population)
-    
-    tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
-    steps = 500
-    
-    
-    chaintype = "tree"
-    
-    if chaintype == "tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_mst_bipartition_tree_random)
-    
-    if chaintype == "uniform_tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_uu_bipartition_tree_random)
-    
-    
-    
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=sierp_partition, total_steps=steps)
-    
-    
-    z = 0
-    num_cuts_list = []
-    
-    
-    seats_won_table = []
-    best_left = np.inf
-    best_right = -np.inf
-    
-    for part in exp_chain:
-    
-    #for i in range(steps):
-    #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
-    
-        seats_won = 0
-        z += 1
-        print("step ", z)
-    
-        for edge in part["cut_edges"]:
-            g_sierpinsky[edge[0]][edge[1]]["cut_times"] += 1
-    
-        for i in range(k):
-            rural_pop = 0
-            urban_pop = 0
-            for n in graph.nodes():
-                if part.assignment[n] == i:
-                    rural_pop += graph.nodes[n]["RVAP"]
-                    urban_pop += graph.nodes[n]["UVAP"]
-            total_seats = int(rural_pop > urban_pop)
-            seats_won += total_seats
-        seats_won_table.append(seats_won)
-        if seats_won < best_left:
-            best_left = seats_won
-            left_mander = copy.deepcopy(part.parts)
-        if seats_won > best_right:
-            best_right = seats_won
-            right_mander = copy.deepcopy(part.parts)
-        #print("finished round"
-    
-    
-    edge_colors = [g_sierpinsky[edge[0]][edge[1]]["cut_times"] for edge in g_sierpinsky.edges()]
-    
-    pos=nx.get_node_attributes(g_sierpinsky, 'pos')
-    
-    plt.figure()
-    nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1,
-                        edge_color=edge_colors, node_shape='s',
-                        cmap='magma', width=3)
-    plt.savefig("./plots/edges" + tag + ".png")
-    plt.close()
-    
-    plt.figure()
-    plt.hist(seats_won_table, bins = 10)
-    
-    name = "./plots/seats_histogram" + tag +".png"
-    plt.savefig(name)
-    plt.close()    
-
-    return left_mander, right_mander
+    left_mander, right_mander = produce_sample(g_sierpinsky, k , tag)
     
