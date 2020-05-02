@@ -227,7 +227,7 @@ def restricted_planar_dual(graph):
     for v in graph.nodes():
         incidence[v] = set()
         
-    for face in faces:
+    for face in graph.graph["faces"]:
         for v in face:
             incidence[v].add(face)
     
@@ -255,3 +255,12 @@ def draw_with_location(graph):
 #        graph.nodes[x]["pos"] = [graph.nodes[x]["X"], graph.nodes[x]["Y"]]
 
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 20, width = .5, cmap=plt.get_cmap('jet'))
+  
+    
+def test():  
+    graph = nx.grid_graph([4,4])
+    for x in graph.nodes():
+        graph.nodes[x]["pos"] = x
+    dual = restricted_planar_dual(graph)
+    draw_with_location(graph)
+    draw_with_location(dual)
