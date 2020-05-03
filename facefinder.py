@@ -221,9 +221,23 @@ def restricted_planar_dual(graph):
             location += graph.nodes[v]["pos"].astype("float64")
         dual_graph.nodes[face]["pos"] = location / len(face)
     ##handle edges
+    #Construct incidence table --
+    #We use this to efficiently construc the edges in the dual.
+    incidence = {}
+    for v in graph.nodes():
+        incidence[v] = set()
+        
+    for face in graph.graph["faces"]:
+        for v in face:
+            incidence[v].add(face)
+    
+    #print(incidence)
+    
+    
     for e in graph.edges():
-        for face1 in graph.graph["faces"]:
-            for face2 in graph.graph["faces"]:
+        v = e[0]
+        for face1 in incidence[v]:
+            for face2 in incidence[v]:
                 if face1 != face2:
                     if (e[0] in face1) and (e[1] in face1) and (e[0] in face2) and (e[1] in face2):
                         dual_graph.add_edge(face1, face2)
@@ -241,3 +255,12 @@ def draw_with_location(graph):
 #        graph.nodes[x]["pos"] = [graph.nodes[x]["X"], graph.nodes[x]["Y"]]
 
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 20, width = .5, cmap=plt.get_cmap('jet'))
+  
+    
+def test():  
+    graph = nx.grid_graph([4,4])
+    for x in graph.nodes():
+        graph.nodes[x]["pos"] = x
+    dual = restricted_planar_dual(graph)
+    draw_with_location(graph)
+    draw_with_location(dual)
