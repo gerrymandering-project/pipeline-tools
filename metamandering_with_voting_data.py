@@ -388,7 +388,9 @@ def produce_sample(graph, k, tag, sample_size = 500):
                     urban_pop += graph.nodes[n]["UVAP"]
             total_seats = int(rural_pop > urban_pop)
             seats_won += total_seats
+        #total seats won by rual pop 
         seats_won_table.append(seats_won)
+        # save gerrymandered partitionss
         if seats_won < best_left:
             best_left = seats_won
             left_mander = copy.deepcopy(part.parts)
@@ -457,7 +459,7 @@ def metamander_around_partition(graph, dual, target_partition, tag):
     print('finished assigning special faces')
     g_sierpinsky = face_sierpinski_mesh(graph, special_faces)
     print("made metamander")
-    
+    # change from RVAP and UVAP to approprate election data columns 
     for node in g_sierpinsky:
         g_sierpinsky.nodes[node]['C_X'] = g_sierpinsky.nodes[node]['pos'][0]
         g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
@@ -497,13 +499,13 @@ def metamander_experiment():
     which_map = 0
 
     graph, dual = preprocessing("https://raw.github.com/mggg-states/NC-shapefiles/master/NC_VTD.zip")
-    
+    #finds two extreme partitions to metamander around
     left_mander, right_mander = test_and_find_left_right_manders(graph)
     
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
 
-    
+    # left is leftmost extreme partition
     metamander_around_partition(graph, dual, left_mander, tag + "LEFTMANDER")
     
     graph = hold_graph
