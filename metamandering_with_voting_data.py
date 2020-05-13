@@ -250,20 +250,19 @@ def smooth_node(graph, v):
 def preprocessing(url):
     maps = [ "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_13.json", "https://people.csail.mit.edu/ddeford/COUSUB/COUSUB_55.json", "https://people.csail.mit.edu/ddeford/COUNTY/COUNTY_13.json"]
 
-    #extract_github_data(url)
-    data = gpd.read_file("data/NC_VTD.shp")
-    data.set_index("VTD", inplace=True)
-    problems = ['3702144.1', '3705722', '37163LAKE', '37179041', '37193108']
-    for problem in problems:
-        data.loc[problem, "geometry"] = data.loc[problem, "geometry"].buffer(0)
-    graph = Graph.from_geodataframe(data)
-    graph.add_data(data)
-    centroids = data.centroid
-    c_x = centroids.x
-    c_y = centroids.y
-    pos = {node: [c_x[node], c_y[node]] for node in graph.nodes}
+    # #extract_github_data(url)
+    # data = gpd.read_file("data/NC_VTD.shp")
+    # data.set_index("VTD", inplace=True)
+    # problems = ['3702144.1', '3705722', '37163LAKE', '37179041', '37193108']
+    # for problem in problems:
+    #     data.loc[problem, "geometry"] = data.loc[problem, "geometry"].buffer(0)
+    # graph = Graph.from_geodataframe(data)
+    # graph.add_data(data)
+    ## using daryls population balanced graph 
+    graph = Graph.from_json("jsons/NC.json")
+    #pos = {node: [c_x[node], c_y[node]] for node in graph.nodes}
     for node in graph.nodes():
-        graph.nodes[node]['pos'] = pos[node]
+        graph.nodes[node]['pos'] = [ graph.nodes[node]["C_X"], graph.nodes[node]["C_Y"] ]
     print(nx.check_planarity(graph))
 
     #Have to remove bad nodes in order for the duality thing to work properly
@@ -307,7 +306,7 @@ def preprocessing(url):
     
     
     for node in graph.nodes():
-        graph.nodes[node]["population"] = graph.nodes[node]["PL10AA_TOT"]
+        graph.nodes[node]["population"] = graph.nodes[node]["TOTPOP"]
 
 
     return graph, dual
@@ -329,7 +328,11 @@ def produce_sample(graph, k, tag, sample_size = 500):
     
     
     ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
-    initial_partition = build_balanced_k_partition(graph, list(range(k)), "population", ideal_population, .1)
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
+    initial_partition = Partition(graph, assignment='part', updaters=updaters)
     #viz(g_sierpinsky, set([]), sierp_partition.parts)
     pop1 = .1
     
@@ -384,8 +387,8 @@ def produce_sample(graph, k, tag, sample_size = 500):
             urban_pop = 0
             for n in graph.nodes():
                 if part.assignment[n] == i:
-                    rural_pop += graph.nodes[n]["RVAP"]
-                    urban_pop += graph.nodes[n]["UVAP"]
+                    rural_pop += graph.nodes[n]["EL16G_PR_R"]
+                    urban_pop += graph.nodes[n]["EL16G_PR_D"]
             total_seats = int(rural_pop > urban_pop)
             seats_won += total_seats
         #total seats won by rual pop 
@@ -465,10 +468,10 @@ def metamander_around_partition(graph, dual, target_partition, tag):
         g_sierpinsky.nodes[node]['C_Y'] = g_sierpinsky.nodes[node]['pos'][1]
         if 'population' not in g_sierpinsky.nodes[node]:
             g_sierpinsky.nodes[node]['population'] = 0
-        if 'RVAP' not in g_sierpinsky.nodes[node]:
-            g_sierpinsky.nodes[node]['RVAP'] = 0
-        if 'UVAP' not in g_sierpinsky.nodes[node]:
-            g_sierpinsky.nodes[node]['UVAP'] = 0
+        if 'EL16G_PR_D' not in g_sierpinsky.nodes[node]:
+            g_sierpinsky.nodes[node]['EL16G_PR_D'] = 0
+        if 'EL16G_PR_R' not in g_sierpinsky.nodes[node]:
+            g_sierpinsky.nodes[node]['EL16G_PR_R'] = 0
         ##Need to add the voting data
     total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
     
