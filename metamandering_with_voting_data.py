@@ -334,16 +334,15 @@ def produce_sample(graph, k, tag, sample_size = 500):
                         }
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
     #viz(g_sierpinsky, set([]), sierp_partition.parts)
-    pop1 = .1
     
     
-    popbound = within_percent_of_ideal_population(initial_partition, pop1)
     #ideal_population = sum(sierp_partition["population"].values()) / len(sierp_partition)
     print(ideal_population)
     
-    tree_proposal = partial(recom,pop_col="population",pop_target=ideal_population,epsilon= 1 ,node_repeats=1)
     steps = sample_size
-    
+    pop1 = .1
+    popbound = within_percent_of_ideal_population(initial_partition, pop1)
+
     
     chaintype = "tree"
     
@@ -367,9 +366,10 @@ def produce_sample(graph, k, tag, sample_size = 500):
     seats_won_table = []
     best_left = np.inf
     best_right = -np.inf
-    
+    ctr = 0
     for part in exp_chain:
-    
+        ctr += 1
+        print(ctr)
     #for i in range(steps):
     #    part = build_balanced_partition(g_sierpinsky, "population", ideal_population, .05)
     
