@@ -226,7 +226,7 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
     plt.savefig(name)
     plt.close()    
     return left_mander, right_mander
-    
+
 def assign_special_faces(graph, k):
     special_faces = []
     for node in graph.nodes():
@@ -298,6 +298,10 @@ def metamander_around_partition(graph, dual, target_partition, tag):
 def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     #Samples k partitions of the graph, stores the cut edges and records them graphically
     #Also stores vote histograms, and returns most extreme partitions.
+    updaters = {'population': Tally('population'),
+                        'cut_edges': cut_edges,
+                        'step_num': step_num,
+                        }
     for edge in graph.edges():
         graph[edge[0]][edge[1]]['cut_times'] = 0
     
@@ -305,7 +309,7 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
             #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
             graph.nodes[n]["last_flipped"] = 0
             graph.nodes[n]["num_flips"] = 0
-    
+    ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
     pop1 = .05
     popbound = within_percent_of_ideal_population(initial_partition, pop1)
@@ -326,13 +330,44 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     
     z = 0
     num_cuts_list = []
+    seats_won_table = []
+    best_left = np.inf
+    best_right = -np.inf
     for part in exp_chain:
 
-        if z % 100 == 0:
-            print("step ", z)
+        #if z % 100 == 0:
+        print("step ", z)
     
         for edge in part["cut_edges"]:
             graph[edge[0]][edge[1]]["cut_times"] += 1
+        for i in range(k):
+            rep_votes = 0
+            dem_votes = 0
+            for n in graph.nodes():
+                if part.assignment[n] == i:
+                    rep_votes += graph.nodes[n]["EL16G_PR_R"]
+                    dem_votes += graph.nodes[n]["EL16G_PR_D"]
+            total_seats = int(rep_votes > dem_votes)
+            seats_won += total_seats
+        #total seats won by rep
+        seats_won_table.append(seats_won)
+        # save gerrymandered partitionss
+        if seats_won < best_left:
+            best_left = seats_won
+            left_mander = copy.deepcopy(part.parts)
+        if seats_won > best_right:
+            best_right = seats_won
+            right_mander = copy.deepcopy(part.parts)
+        #print("finished round"
+    
+    print("max", best_right, "min:", best_left)
+    
+    plt.figure()
+    plt.hist(seats_won_table, bins = 10)
+    
+    name = "./plots/seats_histogram" + tag +".png"
+    plt.savefig(name)
+    plt.close()    
         
     edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
     
