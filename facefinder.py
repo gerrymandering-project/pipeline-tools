@@ -1,7 +1,21 @@
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
+from gerrychain.tree import bipartition_tree as bpt
+from gerrychain import Graph
+from gerrychain import MarkovChain
+from gerrychain.constraints import (Validator, single_flip_contiguous,
+                                    within_percent_of_ideal_population, UpperBound)
+from gerrychain.proposals import propose_random_flip, propose_chunk_flip
+from gerrychain.accept import always_accept
+from gerrychain.updaters import Election, Tally, cut_edges
+from gerrychain import GeographicPartition
+from gerrychain.partition import Partition
+from gerrychain.proposals import recom
+from gerrychain.metrics import mean_median, efficiency_gap
+from gerrychain.tree import recursive_tree_part, bipartition_tree_random, PopulatedGraph, contract_leaves_until_balanced_or_none, find_balanced_edge_cuts
 
 
 def compute_rotation_system(graph):
@@ -264,3 +278,72 @@ def test():
     dual = restricted_planar_dual(graph)
     draw_with_location(graph)
     draw_with_location(dual)
+
+def my_mst_bipartition_tree_random(
+    graph,
+    pop_col,
+    pop_target,
+    epsilon,
+    node_repeats=1,
+    spanning_tree=None,
+    choice=random.choice):
+    populations = {node: graph.nodes[node][pop_col] for node in graph}
+
+    possible_cuts = []
+    if spanning_tree is None:
+        spanning_tree = get_spanning_tree_mst(graph)
+
+    while len(possible_cuts) == 0:
+        spanning_tree = get_spanning_tree_mst(graph)
+        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
+        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
+
+    return choice(possible_cuts).subset
+def get_spanning_tree_mst(graph):
+    for edge in graph.edges:
+        graph.edges[edge]["weight"] = random.random()
+
+    spanning_tree = nx.tree.maximum_spanning_tree(
+        graph, algorithm="kruskal", weight="weight"
+    )
+    return spanning_tree
+def viz(graph, edge_set, partition):
+    values = [1 - int(x in edge_set) for x in graph.edges()]
+    color_dictionary = {}
+    for x in graph.nodes():
+        color = 0
+        for block in partition.keys():
+            if x in partition[block]:
+                color_dictionary[x] = color
+            color += 1
+        
+    node_values = [color_dictionary[x] for x in graph.nodes()]
+    f = plt.figure()
+    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values, edge_color = values, width = 4, node_size= 65, font_size = 7)
+def distance_from_partition(graph, boundary_edges):
+    #General Idea:
+    #Goal: Given any face of the original graph, want to calculate its distance to the boundary of the partition.
+    #Method: Treat that face as a vertex v of the dual graph D, and then (using above) treat the boundary of the partition of a set of vertices S of the dual graph. 
+    # Then calculate distance from v to S in D, using:
+    #d = infinity
+#   For each s in S:
+ #    d = min ( distance_in_D(v,s), d)
+    boundary_nodes = set( [x[0] for x in boundary_edges] + [x[1] for x in boundary_edges] )
+    for node in graph.nodes():
+        if node in boundary_nodes:
+            graph.nodes[node]["distance"] = 0
+        else:
+            graph.nodes[node]["distance"] = np.inf
+    for step in range(len(graph.nodes())):
+        for node in graph.nodes():
+            neighbor_distance = min([graph.nodes[x]["distance"] for x in graph.neighbors(node)]) + 1
+            new_distance = min(neighbor_distance, graph.nodes[node]["distance"])
+            graph.nodes[node]["distance"] = new_distance
+    return graph
+
+def compute_cross_edge(graph,partition):
+    cross_list = []
+    for n in graph.edges:
+        if Partition.crosses_parts(partition,n):
+            cross_list.append(n)
+    return cross_list
