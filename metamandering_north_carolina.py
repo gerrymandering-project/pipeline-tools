@@ -292,8 +292,8 @@ def metamander_around_partition(graph, dual, target_partition, tag):
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
     plt.savefig("./plots/sierpinsky_mesh.png", format='png')
     plt.close()
+    return g_sierpinsky, k
     
-    produce_sample(g_sierpinsky, k , tag)
 
 def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     #Samples k partitions of the graph, stores the cut edges and records them graphically
@@ -388,7 +388,10 @@ def main():
     left_mander, right_mander = produce_gerrymanders(graph,12,'_nc',100,'tree')
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
-    metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER")
+    metamander , k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER")
+
+    produce_sample(metamander, k , '_nc')
+
 
 
 
