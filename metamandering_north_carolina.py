@@ -345,7 +345,7 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
         #if z % 100 == 0:
         z += 1
         print("step ", z)
-    
+        seats_won = 0
         for edge in part["cut_edges"]:
             graph[edge[0]][edge[1]]["cut_times"] += 1
         for i in range(k):
