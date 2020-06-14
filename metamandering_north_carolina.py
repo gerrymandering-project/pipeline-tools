@@ -234,7 +234,7 @@ def assign_special_faces(graph, k):
             special_faces.append(node)
     return special_faces
 
-def metamander_around_partition(graph, dual, target_partition, tag):
+def metamander_around_partition(graph, dual, target_partition, tag,num_dist):
 
     updaters = {'population': Tally('population'),
                         'cut_edges': cut_edges,
@@ -284,10 +284,13 @@ def metamander_around_partition(graph, dual, target_partition, tag):
         if 'EL16G_PR_R' not in g_sierpinsky.nodes[node]:
             g_sierpinsky.nodes[node]['EL16G_PR_R'] = 0
         ##Need to add the voting data
+    print("assigning districts to metamander")
     total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
-    
+    cddict = recursive_tree_part(graph,range(num_dist),total_pop/num_dist,"population", .01,1)
+    for node in graph.nodes():
+        graph.nodes[node]['part'] = cddict[node]
     #sierp_partition = build_trivial_partition(g_sierpinsky)
-    
+    print("assigned districts")
     plt.figure()
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
     plt.savefig("./plots/sierpinsky_mesh.png", format='png')
@@ -298,6 +301,7 @@ def metamander_around_partition(graph, dual, target_partition, tag):
 def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     #Samples k partitions of the graph, stores the cut edges and records them graphically
     #Also stores vote histograms, and returns most extreme partitions.
+    print("producing sample")
     updaters = {'population': Tally('population'),
                         'cut_edges': cut_edges,
                         'step_num': step_num,
@@ -309,9 +313,11 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
             #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
             graph.nodes[n]["last_flipped"] = 0
             graph.nodes[n]["num_flips"] = 0
+    print("set up chain")
     ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
     pop1 = .05
+    print("popbound")
     popbound = within_percent_of_ideal_population(initial_partition, pop1)
     
     if chaintype == "tree":
@@ -333,9 +339,11 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     seats_won_table = []
     best_left = np.inf
     best_right = -np.inf
+    print("begin chain")
     for part in exp_chain:
 
         #if z % 100 == 0:
+        z += 1
         print("step ", z)
     
         for edge in part["cut_edges"]:
@@ -388,7 +396,8 @@ def main():
     left_mander, right_mander = produce_gerrymanders(graph,12,'_nc',100,'tree')
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
-    metamander , k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER")
+    num_dist = 13
+    metamander , k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER",num_dist)
 
     produce_sample(metamander, k , '_nc')
 
