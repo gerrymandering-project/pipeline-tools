@@ -331,7 +331,7 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
         print("Chaintype used: ", chaintype)
         raise RuntimeError("Chaintype not recongized. Use 'tree' or 'uniform_tree' instead")
     
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition, total_steps=steps)
+    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition, total_steps=sample_size)
     
     
     z = 0
