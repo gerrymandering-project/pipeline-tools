@@ -309,10 +309,10 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     for edge in graph.edges():
         graph[edge[0]][edge[1]]['cut_times'] = 0
     
-        for n in graph.nodes():
-            #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
-            graph.nodes[n]["last_flipped"] = 0
-            graph.nodes[n]["num_flips"] = 0
+    for n in graph.nodes():
+        #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
+        graph.nodes[n]["last_flipped"] = 0
+        graph.nodes[n]["num_flips"] = 0
     print("set up chain")
     ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
@@ -342,9 +342,10 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     print("begin chain")
     for part in exp_chain:
 
-        #if z % 100 == 0:
+        
         z += 1
-        print("step ", z)
+        if z % 100 == 0:
+            print("step ", z)
         seats_won = 0
         for edge in part["cut_edges"]:
             graph[edge[0]][edge[1]]["cut_times"] += 1
@@ -362,10 +363,10 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
         # save gerrymandered partitionss
         if seats_won < best_left:
             best_left = seats_won
-            left_mander = copy.deepcopy(part.parts)
+            #left_mander = copy.deepcopy(part.parts)
         if seats_won > best_right:
             best_right = seats_won
-            right_mander = copy.deepcopy(part.parts)
+            #right_mander = copy.deepcopy(part.parts)
         #print("finished round"
     
     print("max", best_right, "min:", best_left)
@@ -373,7 +374,7 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
     plt.figure()
     plt.hist(seats_won_table, bins = 10)
     
-    name = "./plots/seats_histogram" + tag +".png"
+    name = "./plots/seats_histogram_metamander" + tag +".png"
     plt.savefig(name)
     plt.close()    
         

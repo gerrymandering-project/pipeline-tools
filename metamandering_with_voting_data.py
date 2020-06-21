@@ -118,12 +118,8 @@ def build_partition_meta(graph, mean):
     print("cut edges are", partition["cut_edges"])
     return partition
 
-def assign_special_faces(graph, k):
-    special_faces = []
-    for node in graph.nodes():
-        if graph.nodes[node]['distance'] >= k:
-            special_faces.append(node)
-    return special_faces
+
+
 
 
 def remove_undirected_edge(graph, v, u):
@@ -487,7 +483,7 @@ def metamander_around_partition(graph, dual, target_partition, tag):
 
 def test_and_find_left_right_manders(graph):
 
-    k = 6
+    k = 12
     tag = "state_map" + "nc" + "trial_num"
     ##Number of Partitions Goes Here
     
