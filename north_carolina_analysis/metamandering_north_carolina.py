@@ -5,7 +5,6 @@ import geopandas as gpd
 import functools
 import datetime
 import matplotlib
-import facefinder
 from facefinder import *
 import time
 import requests
@@ -37,54 +36,6 @@ from gerrychain.proposals import recom
 from gerrychain.metrics import mean_median, efficiency_gap
 from gerrychain.tree import recursive_tree_part, bipartition_tree_random, PopulatedGraph, contract_leaves_until_balanced_or_none, find_balanced_edge_cuts
 
-def face_sierpinski_mesh(graph, special_faces):
-    #parameters: 
-    #graph: graph object that edges will be added to
-    #special_faces: list of faces that we want to add node/edges to
-    #k: integer depth parameter for depth of face refinement
-    max_label = max(list(graph.nodes()))
-    for face in special_faces:
-        graph.add_node(face)
-        neighbor_list = []
-        locations = []
-        connections = []
-        location = np.array([0,0]).astype("float64")
-        for v in face:
-            neighbor_list.append(v)
-            location += np.array(graph.nodes[v]["pos"]).astype("float64")
-        graph.nodes[face]["pos"] = location / len(face)
-        for w in face:
-            locations.append(graph.nodes[w]["pos"] - graph.nodes[face]["pos"])
-        angles = [float(np.arctan2(x[0], x[1])) for x in locations]
-        neighbor_list.sort(key=dict(zip(neighbor_list, angles)).get)
-        for v in range(0,len(neighbor_list)):
-            next_index = (v+1) % len(neighbor_list)
-            distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(graph.nodes[neighbor_list[next_index]]["pos"])
-            distance = distance * .5
-            label = max_label + 1
-            max_label += 1
-            graph.add_node(label)
-            graph.nodes[label]['pos'] = distance
-            remove_undirected_edge(graph, neighbor_list[v], neighbor_list[next_index])
-            graph.add_edge(neighbor_list[v],label)
-            graph.add_edge(label,neighbor_list[next_index])
-            connections.append(label)
-        for v in range(0,len(connections)):
-            if v+1 < len(connections):
-                graph.add_edge(connections[v],connections[v+1])
-            else:
-                graph.add_edge(connections[v],connections[0])
-        graph.remove_node(face)
-    return graph
-
-def remove_undirected_edge(graph, v, u):
-    if (v,u) in graph.edges():
-        graph.remove_edge(v,u)
-        return 
-    
-    if (u,v) in graph.edges():
-        graph.remove_edge(u,v)
-        return 
 
 def preprocessing(path_to_json):
     graph = Graph.from_json(path_to_json)
@@ -219,12 +170,15 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
     
     print("max", best_right, "min:", best_left)
     
-    plt.figure()
-    plt.hist(seats_won_table, bins = 10)
+    #plt.figure()
+    #plt.hist(seats_won_table, bins = 10)
     
     name = "./plots/seats_histogram" + tag +".png"
-    plt.savefig(name)
-    plt.close()    
+    #plt.savefig(name)
+    #plt.close() 
+    sns_plot = sns.distplot(seats_won_table, label="North Carolina Republican Vote Distribution").get_figure()
+    plt.legend()
+    sns_plot.savefig(name)
     return left_mander, right_mander
 
 def assign_special_faces(graph, k):
@@ -293,6 +247,7 @@ def metamander_around_partition(graph, dual, target_partition, tag,num_dist):
     print("assigned districts")
     plt.figure()
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size = 1, width = 1, cmap=plt.get_cmap('jet'))
+    plt.title("North Carolina Metamander")
     plt.savefig("./plots/sierpinsky_mesh.png", format='png')
     plt.close()
     return g_sierpinsky, k
