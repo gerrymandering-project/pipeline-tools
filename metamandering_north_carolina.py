@@ -215,9 +215,8 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
 
     plt.figure()
     plt.hist(seats_won_table, bins=10)
-    plt.close()
 
-    name = "./plots/seats_hist/seats_histogram_orig" + tag + ".png"
+    name = "./plots/large_sample/seats_hist/seats_histogram_orig" + tag + ".png"
     plt.savefig(name)
     plt.close()
     return left_mander, right_mander
@@ -246,10 +245,9 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
             color += 1
 
     target_partition = Partition(graph, assignment, updaters=updaters)
-    plt.figure()
 
     viz(graph, set([]), target_partition.parts)
-    plt.savefig("./plots/target_maps/target_map" + tag + ".png", format='png')
+    plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
     plt.close()
 
     print("made partition")
@@ -294,12 +292,12 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
     plt.figure()
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1, width=1,
             cmap=plt.get_cmap('jet'))
-    plt.savefig("./plots/sierpinsky_plots/sierpinsky_mesh" + tag + ".png", format='png')
+    plt.savefig("./plots/large_sample/sierpinsky_plots/sierpinsky_mesh" + tag + ".png", format='png')
     plt.close()
     return g_sierpinsky, k
 
 
-def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
+def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
     # Samples k partitions of the graph, stores the cut edges and records them graphically
     # Also stores vote histograms, and returns most extreme partitions.
     print("producing sample")
@@ -408,20 +406,17 @@ def main():
     # produce_sample(metamander, k, '_nc')
     max_mean = 0
     min_mean = math.inf
-    for i in range(601, 801):
-        left_mander, right_mander = produce_gerrymanders(hold_graph, 12, '_nc' + str(i), 100, 'tree')
-        # metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
-        #                                             num_dist, True)
+    for i in range(201, 401):
+        left_mander, right_mander = produce_gerrymanders(hold_graph, 12, '_nc' + str(i), 1, 'tree')
         metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
                                                     num_dist, True)
         mean, std, hold_graph = produce_sample(metamander, k, '_ncS' + str(i))
         edge_colors = [hold_graph[edge[0]][edge[1]]["cut_times"] for edge in hold_graph.edges()]
 
-
+        title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std) + " Number:" + str(i)
+        plt.title(title)
         if mean > max_mean:
-            title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std) + " Number:" + str(i)
-            plt.title(title)
-            name = "./plots/extreme_shift/seats_histogram" + "MaxMean_Left_random" + ".png"
+            name = "./plots/extreme_shift/large_sample/seats_histogram" + "MaxMean_Left_random" + ".png"
             plt.savefig(name)
             plt.close()
 
@@ -429,13 +424,11 @@ def main():
             nx.draw(hold_graph, pos=nx.get_node_attributes(hold_graph, 'pos'), node_size=0,
                     edge_color=edge_colors, node_shape='s',
                     cmap='magma', width=1)
-            plt.savefig("./plots/extreme_shift/edges" + "MaxMean_Left_random" + ".png")
+            plt.savefig("./plots/extreme_shift/large_sample/edges" + "MaxMean_Left_random" + ".png")
             plt.close()
             max_mean = mean
         elif mean < min_mean:
-            title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std) + " Number:" + str(i)
-            plt.title(title)
-            name = "./plots/extreme_shift/seats_histogram" + "MinMean_Left_random" + ".png"
+            name = "./plots/extreme_shift/large_sample/seats_histogram" + "MinMean_Left_random" + ".png"
             plt.savefig(name)
             plt.close()
 
@@ -443,7 +436,7 @@ def main():
             nx.draw(hold_graph, pos=nx.get_node_attributes(hold_graph, 'pos'), node_size=0,
                     edge_color=edge_colors, node_shape='s',
                     cmap='magma', width=1)
-            plt.savefig("./plots/extreme_shift/edges" + "MinMean_Left_random" + ".png")
+            plt.savefig("./plots/extreme_shift/large_sample/edges" + "MinMean_Left_random" + ".png")
             plt.close()
             min_mean = mean
 
@@ -463,7 +456,7 @@ def main():
     plt.hist(std_table, bins=10)
     std_table.sort()
     plt.title("min std: " + str(float("{:.2f}".format(std_table[0]))) + " max std: " + str(float("{:.2f}".format(std_table[-1]))))
-    plt.savefig("./plots/tables_Left_random.png", format='png')
+    plt.savefig("./plots/extreme_shift/tables_Left_random.png", format='png')
     plt.close()
 
 
