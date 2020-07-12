@@ -37,60 +37,6 @@ from gerrychain.metrics import mean_median, efficiency_gap
 from gerrychain.tree import recursive_tree_part, bipartition_tree_random, PopulatedGraph, contract_leaves_until_balanced_or_none, find_balanced_edge_cuts
 
 
-def preprocessing(path_to_json):
-    graph = Graph.from_json(path_to_json)
-    for node in graph.nodes():
-        graph.nodes[node]['pos'] = [ graph.nodes[node]["C_X"], graph.nodes[node]["C_Y"] ]
-    graph = duality_cleaning(graph)
-    print("making dual")
-    dual = restricted_planar_dual(graph)
-    print("made dual")
-    
-    save_fig(graph,"./plots/UnderlyingGraph.png",1)
-    
-    for node in graph.nodes():
-        graph.nodes[node]["population"] = graph.nodes[node]["TOTPOP"]
-
-
-    return graph, dual
-
-def duality_cleaning(graph):
-    #Have to remove bad nodes in order for the duality thing to work properly
-    cleanup = True
-    while cleanup:
-        print("clean up phase")
-        print(len(graph))
-        deg_one_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 1:
-                deg_one_nodes.append(v)
-        graph.remove_nodes_from(deg_one_nodes)
-        
-        deg_2_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 2:
-                deg_2_nodes.append(v)
-    
-        for v in deg_2_nodes:
-            graph = smooth_node(graph, v)    
-        
-        bad_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 1 or graph.degree(v) == 2:
-                bad_nodes.append(v)
-        if len(bad_nodes) > 0:
-            cleanup = True
-        else:
-            cleanup = False
-    return graph
-def smooth_node(graph, v):
-    neighbors = list(graph.neighbors(v))
-    graph.remove_node(v)
-    try:
-        graph.add_edge(neighbors[0], neighbors[1])
-    except:
-        print(neighbors)
-    return graph
 
 def step_num(partition):
                 parent = partition.parent
@@ -99,11 +45,6 @@ def step_num(partition):
                     return 0
 
                 return parent["step_num"] + 1
-def save_fig(graph,path, size):
-    plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 1, width = size, cmap=plt.get_cmap('jet'))
-    plt.savefig(path, format='png')
-    plt.close()
 def always_true(proposal):
     return True
 
