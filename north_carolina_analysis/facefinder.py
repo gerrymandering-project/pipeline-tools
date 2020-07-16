@@ -351,7 +351,7 @@ def face_sierpinski_mesh(graph, special_faces):
     #parameters: 
     #graph: graph object that edges will be added to
     #special_faces: list of faces that we want to add node/edges to
-    #k: integer depth parameter for depth of face refinement
+    #TODO:k: integer depth parameter for depth of face refinement
     max_label = max(list(graph.nodes()))
     for face in special_faces:
         graph.add_node(face)
