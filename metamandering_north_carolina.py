@@ -80,6 +80,7 @@ def preprocessing(path_to_json):
     graph = duality_cleaning(graph)
     print("making dual")
     dual = restricted_planar_dual(graph)
+    #restricted means it does't produce the unbounded face
     print("made dual")
 
     save_fig(graph, "./plots/UnderlyingGraph.png", 1)
