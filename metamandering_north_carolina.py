@@ -402,6 +402,8 @@ def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
 
 
 def main():
+  
+  
     graph, dual = preprocessing("jsons/NC.json")
     # left_mander, right_mander = produce_gerrymanders(graph, 12, '_nc', 100, 'tree')
     hold_graph = copy.deepcopy(graph)
@@ -415,6 +417,8 @@ def main():
     max_mean = 0
     min_mean = math.inf
     for i in range(1, 500):
+        #is 500 necessary to see the phenomenon we were discussing? How many democratic gerrymanders do we have to metamander around until we find one that
+        #gives a republican gerrymander?
         left_mander, right_mander = produce_gerrymanders(hold_graph, 13, '_nc' + str(i), 1, 'tree')
         #NVM, saw in the history it was 100 samples. ###why is it only getting one sample? am I missing something? - Lorenzo
         metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
@@ -435,6 +439,9 @@ def main():
                     cmap='magma', width=1)
             plt.savefig("./plots/extreme_shift/large_sample/edges" + "MaxMean_Left_random" + ".png")
             plt.close()
+            
+            #I think writing images is pretty slow, it might be better to just save the current winner and then make the image afterwards.
+            
             max_mean = mean
         elif mean < min_mean:
             name = "./plots/extreme_shift/large_sample/seats_histogram" + "MinMean_Left_random" + ".png"
