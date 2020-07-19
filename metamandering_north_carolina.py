@@ -165,6 +165,9 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
                 'step_num': step_num,
                 }
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
+    
+    #probably would be clear to extract k from this assignment?
+    
     pop1 = .05
     popbound = within_percent_of_ideal_population(initial_partition, pop1)
 
@@ -409,7 +412,7 @@ def main():
     min_mean = math.inf
     for i in range(1, 500):
         left_mander, right_mander = produce_gerrymanders(hold_graph, 13, '_nc' + str(i), 1, 'tree')
-        #why is it only getting one sample? am I missing something? - Lorenzo
+        #NVM, saw in the history it was 100 samples. ###why is it only getting one sample? am I missing something? - Lorenzo
         metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
                                                     num_dist, True)
         mean, std, hold_graph = produce_sample(metamander, k, '_ncS' + str(i))
