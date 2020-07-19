@@ -289,6 +289,10 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
     print("assigning districts to metamander")
     total_pop = sum([g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
     cddict = recursive_tree_part(graph, range(num_dist), total_pop / num_dist, "population", .01, 1)
+    #I Think this should be replaced with the code that build a connected partition based on the partition of the initial graph by assigning new nodes to one of their random neighbors
+    #Besides being faster, having each map have a different random starting point means that the gerrychain runs will be biased by the starting position, and not just the map. - Lorenzo
+    
+    
     for node in graph.nodes():
         graph.nodes[node]['part'] = cddict[node]
     # sierp_partition = build_trivial_partition(g_sierpinsky)
