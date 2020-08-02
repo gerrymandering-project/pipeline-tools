@@ -1,0 +1,15 @@
+{
+    "POPULATION_COLUMN" : "TOTPOP",
+    "ASSIGNMENT_COLUMN" : "part",
+    "INPUT_GRAPH_FILENAME" : "./json/NC.json",
+    "X_POSITION" : "C_X",
+    "Y_POSITION" : "C_Y",
+    "UNDERLYING_GRAPH_FILE" : "./plots/UnderlyingGraph.png",
+    "WIDTH" : 1,
+    "POPULATION_EPSILON" : 0.05,
+    "ELECTION_NAME" : "2016_Presidential",
+    "PARTY_A_COL" : "EL16G_PR_R",
+    "PARTY_B_COL" : "EL16G_PR_D",
+    "ELECTION_ALIAS" : "2016-PRES",
+    "NODE_REPEATS" : 1
+}

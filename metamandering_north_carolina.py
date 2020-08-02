@@ -1,5 +1,5 @@
-from facefinder import *
-from secret_matamandering import *
+import facefinder
+#from secret_matamandering import *
 
 import matplotlib.pyplot as plt
 
@@ -7,9 +7,14 @@ from functools import partial
 import networkx as nx
 import numpy as np
 import copy
+import random
+import math
+import json
+import sys
 
 from gerrychain import Graph
 from gerrychain import MarkovChain
+from gerrychain import accept
 from gerrychain.constraints import (Validator, single_flip_contiguous,
                                     within_percent_of_ideal_population, UpperBound)
 
@@ -19,51 +24,92 @@ from gerrychain.partition import Partition
 from gerrychain.proposals import recom
 
 from gerrychain.tree import recursive_tree_part
-import math
+
 
 def face_sierpinski_mesh(graph, special_faces):
-    # parameters:
-    # graph: graph object that edges will be added to
-    # special_faces: list of faces that we want to add node/edges to
-    # k: integer depth parameter for depth of face refinement
+    """'Sierpinskifies' certain faces of the graph by adding nodes and edges to
+    certain faces.
+
+    Args:
+        graph: graph object that edges will be added to
+        special_faces: list of faces that we want to add node/edges to
+
+    Returns:
+        graph: The original graph but with nodes and edges added to the special faces
+
+    TODO:
+        Add parameter for depth of sierpinskification
+    """
+
+    # Get maximum node label.
     max_label = max(list(graph.nodes()))
+
     for face in special_faces:
         graph.add_node(face)
-        neighbor_list = []
-        locations = []
-        connections = []
-        location = np.array([0, 0]).astype("float64")
-        for v in face:
-            neighbor_list.append(v)
-            location += np.array(graph.nodes[v]["pos"]).astype("float64")
-        graph.nodes[face]["pos"] = location / len(face)
-        for w in face:
-            locations.append(graph.nodes[w]["pos"] - graph.nodes[face]["pos"])
+        neighbor_list = [] #  Neighbors of face
+        locations = [] # Relative position of each neighbor
+        connections = [] # List of all new nodes added
+        locationCount = np.array([0,0]).astype("float64")
+
+        # For each face, add to neighbor_list and add to location count
+        for vertex in face:
+            neighbor_list.append(vertex)
+            locationCount += np.array(graph.nodes[vertex]["pos"]).astype("float64")
+        # Set position of face to be average of all of its vertices
+        graph.nodes[face]["pos"] = locationCount / len(face)
+        # In order, append the relative position of each vertex to the position of the face
+        for vertex in face:
+            locations.append(graph.nodes[vertex]["pos"] - graph.nodes[face]["pos"])
+        # Sort neighbor_list according to each node's angle with the center of the face
         angles = [float(np.arctan2(x[0], x[1])) for x in locations]
         neighbor_list.sort(key=dict(zip(neighbor_list, angles)).get)
-        for v in range(0, len(neighbor_list)):
-            next_index = (v + 1) % len(neighbor_list)
-            distance = np.array(graph.nodes[neighbor_list[v]]["pos"]) + np.array(
-                graph.nodes[neighbor_list[next_index]]["pos"])
-            distance = distance * .5
+
+        # For each consecutive pair of nodes of, remove their edge, create a new
+        # node at their average position, and connect edge node to the new node:
+        for vertex in range(len(neighbor_list)):
+            next_index = (vertex+1) % len(neighbor_list) # Index of next vertex counter-clockwise
+            # Average position of consecutive nodes
+            avgPos = (np.array(graph.nodes[neighbor_list[vertex]]["pos"]) +
+                      np.array(graph.nodes[neighbor_list[next_index]]["pos"])) * 0.5
+
+            # Determine new label, and increment max_label
             label = max_label + 1
             max_label += 1
+
+            # Add new node to graph with corresponding label at avgPos
             graph.add_node(label)
-            graph.nodes[label]['pos'] = distance
-            remove_undirected_edge(graph, neighbor_list[v], neighbor_list[next_index])
-            graph.add_edge(neighbor_list[v], label)
-            graph.add_edge(label, neighbor_list[next_index])
+            graph.nodes[label]['pos'] = avgPos
+
+            # Remove edge between consecutive nodes
+            remove_undirected_edge(graph, neighbor_list[vertex], neighbor_list[next_index])
+            # Add edge between both of the original nodes and the new node
+            graph.add_edge(neighbor_list[vertex],label)
+            graph.add_edge(label,neighbor_list[next_index])
+            # Add node to connections
             connections.append(label)
-        for v in range(0, len(connections)):
-            if v + 1 < len(connections):
-                graph.add_edge(connections[v], connections[v + 1])
-            else:
-                graph.add_edge(connections[v], connections[0])
+        # Add an edge between each consecutive new node
+        for vertex in range(0,len(connections)):
+            graph.add_edge(connections[vertex],connections[(vertex+1) % len(connections)])
+        # Remove the original face
         graph.remove_node(face)
+
+    # Return the altered graph
     return graph
 
 
 def remove_undirected_edge(graph, v, u):
+    """Removes a single directed edge between the two nodes from the graph, if
+    such an edge exists
+
+    Args:
+        graph: graph to remove edge from
+        v: first node
+        u: second node
+
+    TODO:
+        Verify that both directions should not exist/should only remove a single
+        direction
+    """
     if (v, u) in graph.edges():
         graph.remove_edge(v, u)
         return
@@ -74,27 +120,38 @@ def remove_undirected_edge(graph, v, u):
 
 
 def preprocessing(path_to_json):
+    """Takes file path to JSON graph, and returns the appropriate 
+
+    Args:
+        path_to_json (String): path to graph in JSON format
+
+    Returns:
+        graph (Gerrychain Graph): graph in JSON file following cleaning
+        dual (Gerrychain Graph): planar dual of graph
+    """
     graph = Graph.from_json(path_to_json)
+    # For each node in graph, set 'pos' parameter to position
     for node in graph.nodes():
-        graph.nodes[node]['pos'] = [graph.nodes[node]["C_X"], graph.nodes[node]["C_Y"]]
-    graph = duality_cleaning(graph)
-    print("making dual")
-    dual = restricted_planar_dual(graph)
-    print("made dual")
+        graph.nodes[node]['pos'] = (graph.nodes[node][config['X_POSITION']],
+                                    graph.nodes[node][config['Y_POSITION']])
 
-    save_fig(graph, "./plots/UnderlyingGraph.png", 1)
+    save_fig(graph, config['UNDERLYING_GRAPH_FILE'], config['WIDTH'])
 
-    for node in graph.nodes():
-        graph.nodes[node]["population"] = graph.nodes[node]["TOTPOP"]
+    # Cleans graph to be able to find planar dual
+    # TODO: why is this necessary?
+    #graph = duality_cleaning(graph)
+
+    print('Making Dual')
+    dual = facefinder.restricted_planar_dual(graph)
+    print('Made Dual')
 
     return graph, dual
 
-
+# TODO: What's going on here?
 def duality_cleaning(graph):
     # Have to remove bad nodes in order for the duality thing to work properly
-    cleanup = True
-    while cleanup:
-        print("clean up phase")
+    while True:
+        print("Clean Up Phase")
         print(len(graph))
         deg_one_nodes = []
         for v in graph.nodes():
@@ -110,15 +167,9 @@ def duality_cleaning(graph):
         for v in deg_2_nodes:
             graph = smooth_node(graph, v)
 
-        bad_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 1 or graph.degree(v) == 2:
-                bad_nodes.append(v)
-        if len(bad_nodes) > 0:
-            cleanup = True
-        else:
-            cleanup = False
-    return graph
+        # Exit loop if there are no more degree 1 or 2 nodes
+        if (not any([(graph.degree(node) == 1 or graph.degree(node) == 2) for node in graph.nodes()])):
+            return graph
 
 
 def smooth_node(graph, v):
@@ -132,6 +183,14 @@ def smooth_node(graph, v):
 
 
 def step_num(partition):
+    """Determines the step in a chain a given partion is. Used as an updated.
+
+    Args:
+        partition (Gerrychain Partition): partition in question
+
+    Returns:
+        int: step in chain
+    """
     parent = partition.parent
 
     if not parent:
@@ -141,52 +200,61 @@ def step_num(partition):
 
 
 def save_fig(graph, path, size):
+    """Saves graph to file in desired formed
+
+    Args:
+        graph (Gerrychain graph): graph to be saved
+        path (String): path to file location
+        size (int): width of image
+    """
     plt.figure()
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=1, width=size, cmap=plt.get_cmap('jet'))
-    plt.savefig(path, format='png')
+    # Gets format from end of filename
+    plt.savefig(path, format=path.split('.')[-1])
     plt.close()
 
 
-def always_true(proposal):
-    return True
-
-
 def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
-    # Samples k partitions of the graph
+    # Samples k-partitions of the graph
     # stores vote histograms, and returns most extreme partitions.
-    for n in graph.nodes():
-        graph.nodes[n]["last_flipped"] = 0
-        graph.nodes[n]["num_flips"] = 0
+    for node in graph.nodes():
+        graph.nodes[node]["last_flipped"] = 0
+        graph.nodes[node]["num_flips"] = 0
 
-    ideal_population = sum(graph.nodes[x]["population"] for x in graph.nodes()) / k
-    updaters = {'population': Tally('population'),
+    ideal_population = sum(graph.nodes[x][config["POPULATION_COLUMN"]] for x in graph.nodes()) / k
+    election = Election(
+        config['ELECTION_NAME'],
+        {'PartyA': config['PARTY_A_COL'], 'PartyB': config['PARTY_B_COL']},
+        alias=config['ELECTION_ALIAS']
+    )
+    updaters = {'population': Tally(config['POPULATION_COLUMN']),
                 'cut_edges': cut_edges,
                 'step_num': step_num,
+                config['ELECTION_ALIAS'] : election
                 }
-    initial_partition = Partition(graph, assignment='part', updaters=updaters)
-    pop1 = .05
-    popbound = within_percent_of_ideal_population(initial_partition, pop1)
+    initial_partition = Partition(graph, assignment=config['ASSIGNMENT_COLUMN'], updaters=updaters)
+    popbound = within_percent_of_ideal_population(initial_partition, config['POPULATION_EPSILON'])
 
     if chaintype == "tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_mst_bipartition_tree_random)
+        tree_proposal = partial(recom, pop_col=config["POPULATION_COLUMN"], pop_target=ideal_population,
+                           epsilon=config['POPULATION_EPSILON'], node_repeats=config['NODE_REPEATS'],
+                           method=facefinder.my_mst_bipartition_tree_random)
 
     elif chaintype == "uniform_tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_uu_bipartition_tree_random)
+        tree_proposal = partial(recom, pop_col=config["POPULATION_COLUMN"], pop_target=ideal_population,
+                           epsilon=config['POPULATION_EPSILON'], node_repeats=config['NODE_REPEATS'],
+                           method=facefinder.my_uu_bipartition_tree_random)
     else:
         print("Chaintype used: ", chaintype)
-        raise RuntimeError("Chaintype not recongized. Use 'tree' or 'uniform_tree' instead")
+        raise RuntimeError("Chaintype not recognized. Use 'tree' or 'uniform_tree' instead")
 
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition,
+    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=accept.always_accept, initial_state=initial_partition,
                             total_steps=sample_size)
 
     seats_won_table = []
     best_left = np.inf
     best_right = -np.inf
-    ctr = 0
-    for part in exp_chain:
-        ctr += 1
+    for ctr, part in enumerate(exp_chain):
         seats_won = 0
 
         if ctr % 100 == 0:
@@ -194,15 +262,15 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
         for i in range(k):
             rep_votes = 0
             dem_votes = 0
-            for n in graph.nodes():
-                if part.assignment[n] == i:
-                    rep_votes += graph.nodes[n]["EL16G_PR_R"]
-                    dem_votes += graph.nodes[n]["EL16G_PR_D"]
+            for node in graph.nodes():
+                if part.assignment[node] == i:
+                    rep_votes += graph.nodes[node]["EL16G_PR_R"]
+                    dem_votes += graph.nodes[node]["EL16G_PR_D"]
             total_seats = int(rep_votes > dem_votes)
             seats_won += total_seats
         # total seats won by rep
         seats_won_table.append(seats_won)
-        # save gerrymandered partitionss
+        # save gerrymandered partitions
         if seats_won < best_left:
             best_left = seats_won
             left_mander = copy.deepcopy(part.parts)
@@ -229,6 +297,14 @@ def assign_special_faces(graph, k):
             special_faces.append(node)
     return special_faces
 
+def assign_special_faces_random(graph):
+    max_dist = max(graph.nodes[node]["distance"] for node in graph.nodes())
+    special_faces = []
+    for node in graph.nodes():
+        prob = graph.nodes[node]['distance'] / max_dist
+        if random.uniform(0, 1) < prob:
+            special_faces.append(node)
+    return special_faces
 
 def metamander_around_partition(graph, dual, target_partition, tag, num_dist, secret):
     updaters = {'population': Tally('population'),
@@ -246,12 +322,12 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
 
     target_partition = Partition(graph, assignment, updaters=updaters)
 
-    viz(graph, set([]), target_partition.parts)
+    facefinder.viz(graph, set([]), target_partition.parts)
     plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
     plt.close()
 
     print("made partition")
-    crosses = compute_cross_edge(graph, target_partition)
+    crosses = facefinder.compute_cross_edge(graph, target_partition)
 
     k = len(target_partition.parts)
 
@@ -261,7 +337,7 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
             dual_crosses.append(edge)
 
     print("making dual distances")
-    dual = distance_from_partition(dual, dual_crosses)
+    dual = facefinder.distance_from_partition(dual, dual_crosses)
     print('finished making dual distances')
     if secret:
         special_faces = assign_special_faces_random(dual)
@@ -296,8 +372,8 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
     plt.close()
     return g_sierpinsky, k
 
-
-def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
+# TODO: Changed 10000 to 1000
+def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
     # Samples k partitions of the graph, stores the cut edges and records them graphically
     # Also stores vote histograms, and returns most extreme partitions.
     print("producing sample")
@@ -321,11 +397,11 @@ def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
 
     if chaintype == "tree":
         tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_mst_bipartition_tree_random)
+                                node_repeats=1, method=facefinder.my_mst_bipartition_tree_random)
 
     elif chaintype == "uniform_tree":
         tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=my_uu_bipartition_tree_random)
+                                node_repeats=1, method=facefinder.my_uu_bipartition_tree_random)
     else:
         print("Chaintype used: ", chaintype)
         raise RuntimeError("Chaintype not recongized. Use 'tree' or 'uniform_tree' instead")
@@ -394,8 +470,25 @@ def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
 
 
 def main():
-    graph, dual = preprocessing("jsons/NC.json")
+    # Loads JSON config file
+    if len(sys.argv) > 2:
+        print("Provide single filename")
+        sys.exit()
+    elif len(sys.argv) == 2:
+        configFileName = sys.argv[1]
+    else:
+        configFileName = './config.json'
+
+    with open(configFileName, 'r') as json_file:
+        try:
+            global config
+            config = json.load(json_file)
+        except:
+            print("Unable to load JSON file")
+            sys.exit()
+
     # left_mander, right_mander = produce_gerrymanders(graph, 12, '_nc', 100, 'tree')
+    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
     num_dist = 13
@@ -406,7 +499,8 @@ def main():
     # produce_sample(metamander, k, '_nc')
     max_mean = 0
     min_mean = math.inf
-    for i in range(1, 500):
+    # TODO: Changed 500 to 15
+    for i in range(1, 15):
         left_mander, right_mander = produce_gerrymanders(hold_graph, 13, '_nc' + str(i), 1, 'tree')
         metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
                                                     num_dist, True)
@@ -459,5 +553,5 @@ def main():
     plt.savefig("./plots/extreme_shift/tables_Left_random.png", format='png')
     plt.close()
 
-
-main()
+if __name__ == '__main__':
+    main()

@@ -55,7 +55,7 @@ def is_clockwise(graph,face, average):
     rotated = [x - first for x in angles]
     next_smallest = min([x for x in rotated if x != 0])
     ind = rotated.index(0)
-    if rotated[(ind + 1)% len(rotated)] == next_smallest:
+    if rotated[(ind + 1) % len(rotated)] == next_smallest:
         return False
     else:
         return True
@@ -236,18 +236,18 @@ def restricted_planar_dual(graph):
         dual_graph.nodes[face]["pos"] = location / len(face)
     ##handle edges
     #Construct incidence table --
-    #We use this to efficiently construc the edges in the dual.
+    #We use this to efficiently construct the edges in the dual.
     incidence = {}
     for v in graph.nodes():
         incidence[v] = set()
-        
+
     for face in graph.graph["faces"]:
         for v in face:
             incidence[v].add(face)
-    
+
     #print(incidence)
-    
-    
+
+
     for e in graph.edges():
         v = e[0]
         for face1 in incidence[v]:
@@ -269,9 +269,9 @@ def draw_with_location(graph):
 #        graph.nodes[x]["pos"] = [graph.nodes[x]["X"], graph.nodes[x]["Y"]]
 
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 20, width = .5, cmap=plt.get_cmap('jet'))
-  
-    
-def test():  
+
+
+def test():
     graph = nx.grid_graph([4,4])
     for x in graph.nodes():
         graph.nodes[x]["pos"] = x
@@ -299,6 +299,27 @@ def my_mst_bipartition_tree_random(
         possible_cuts = find_balanced_edge_cuts(h, choice=choice)
 
     return choice(possible_cuts).subset
+def my_uu_bipartition_tree_random(
+    graph,
+    pop_col,
+    pop_target,
+    epsilon,
+    node_repeats=1,
+    spanning_tree=None,
+    choice=random.choice):
+    populations = {node: graph.nodes[node][pop_col] for node in graph}
+
+    possible_cuts = []
+    if spanning_tree is None:
+        spanning_tree = get_spanning_tree_u_w(graph)
+
+    while len(possible_cuts) == 0:
+        spanning_tree = get_spanning_tree_u_w(graph)
+        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
+        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
+
+    return choice(possible_cuts).subset
+
 def get_spanning_tree_mst(graph):
     for edge in graph.edges:
         graph.edges[edge]["weight"] = random.random()
@@ -307,6 +328,7 @@ def get_spanning_tree_mst(graph):
         graph, algorithm="kruskal", weight="weight"
     )
     return spanning_tree
+
 def viz(graph, edge_set, partition):
     values = [1 - int(x in edge_set) for x in graph.edges()]
     color_dictionary = {}
@@ -316,10 +338,12 @@ def viz(graph, edge_set, partition):
             if x in partition[block]:
                 color_dictionary[x] = color
             color += 1
-        
+
     node_values = [color_dictionary[x] for x in graph.nodes()]
     f = plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values, edge_color = values, width = 4, node_size= 65, font_size = 7)
+    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values,
+            edge_color = values, width = 4, node_size= 65, font_size = 7)
+
 def distance_from_partition(graph, boundary_edges):
     #General Idea:
     #Goal: Given any face of the original graph, want to calculate its distance to the boundary of the partition.
