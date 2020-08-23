@@ -80,6 +80,7 @@ def preprocessing(path_to_json):
     graph = duality_cleaning(graph)
     print("making dual")
     dual = restricted_planar_dual(graph)
+    #restricted means it does't produce the unbounded face
     print("made dual")
 
     save_fig(graph, "./plots/UnderlyingGraph.png", 1)
@@ -164,6 +165,9 @@ def produce_gerrymanders(graph, k, tag, sample_size, chaintype):
                 'step_num': step_num,
                 }
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
+    
+    #probably would be clear to extract k from this assignment?
+    
     pop1 = .05
     popbound = within_percent_of_ideal_population(initial_partition, pop1)
 
@@ -285,6 +289,10 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
     print("assigning districts to metamander")
     total_pop = sum([g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
     cddict = recursive_tree_part(graph, range(num_dist), total_pop / num_dist, "population", .01, 1)
+    #I Think this should be replaced with the code that build a connected partition based on the partition of the initial graph by assigning new nodes to one of their random neighbors
+    #Besides being faster, having each map have a different random starting point means that the gerrychain runs will be biased by the starting position, and not just the map. - Lorenzo
+    
+    
     for node in graph.nodes():
         graph.nodes[node]['part'] = cddict[node]
     # sierp_partition = build_trivial_partition(g_sierpinsky)
@@ -394,6 +402,8 @@ def produce_sample(graph, k, tag, sample_size=10000, chaintype='tree'):
 
 
 def main():
+  
+  
     graph, dual = preprocessing("jsons/NC.json")
     # left_mander, right_mander = produce_gerrymanders(graph, 12, '_nc', 100, 'tree')
     hold_graph = copy.deepcopy(graph)
@@ -407,7 +417,10 @@ def main():
     max_mean = 0
     min_mean = math.inf
     for i in range(1, 500):
+        #is 500 necessary to see the phenomenon we were discussing? How many democratic gerrymanders do we have to metamander around until we find one that
+        #gives a republican gerrymander?
         left_mander, right_mander = produce_gerrymanders(hold_graph, 13, '_nc' + str(i), 1, 'tree')
+        #NVM, saw in the history it was 100 samples. ###why is it only getting one sample? am I missing something? - Lorenzo
         metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
                                                     num_dist, True)
         mean, std, hold_graph = produce_sample(metamander, k, '_ncS' + str(i))
@@ -426,6 +439,9 @@ def main():
                     cmap='magma', width=1)
             plt.savefig("./plots/extreme_shift/large_sample/edges" + "MaxMean_Left_random" + ".png")
             plt.close()
+            
+            #I think writing images is pretty slow, it might be better to just save the current winner and then make the image afterwards.
+            
             max_mean = mean
         elif mean < min_mean:
             name = "./plots/extreme_shift/large_sample/seats_histogram" + "MinMean_Left_random" + ".png"
