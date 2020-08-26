@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 
+from queue import SimpleQueue
 from gerrychain.tree import bipartition_tree as bpt
 from gerrychain import Graph
 from gerrychain import MarkovChain
@@ -299,6 +300,7 @@ def my_mst_bipartition_tree_random(
         possible_cuts = find_balanced_edge_cuts(h, choice=choice)
 
     return choice(possible_cuts).subset
+
 def my_uu_bipartition_tree_random(
     graph,
     pop_col,
@@ -329,20 +331,25 @@ def get_spanning_tree_mst(graph):
     )
     return spanning_tree
 
-def viz(graph, edge_set, partition):
-    values = [1 - int(x in edge_set) for x in graph.edges()]
+def viz(partition, edge_set):
+    values = [int(x not in edge_set) for x in partition.graph.edges()]
     color_dictionary = {}
-    for x in graph.nodes():
-        color = 0
-        for block in partition.keys():
-            if x in partition[block]:
-                color_dictionary[x] = color
-            color += 1
+#    for x in graph.nodes():
+        #color = 0
+        #for block in partition.keys():
+            #if x in partition[block]:
+                #color_dictionary[x] = color
+            #color += 1
 
-    node_values = [color_dictionary[x] for x in graph.nodes()]
+    for color, part in enumerate(partition.parts):
+        for node in partition.parts[part]:
+            color_dictionary[node] = color
+
+    node_values = [color_dictionary[x] for x in partition.graph.nodes()]
     f = plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values,
-            edge_color = values, width = 4, node_size= 65, font_size = 7)
+    nx.draw(partition.graph, pos=nx.get_node_attributes(partition.graph, 'pos'),
+            node_color = node_values, edge_color = values, width = 0.1,
+            node_size= 45, font_size = 7)
 
 def distance_from_partition(graph, boundary_edges):
     #General Idea:
@@ -352,22 +359,23 @@ def distance_from_partition(graph, boundary_edges):
     #d = infinity
 #   For each s in S:
  #    d = min ( distance_in_D(v,s), d)
-    boundary_nodes = set( [x[0] for x in boundary_edges] + [x[1] for x in boundary_edges] )
-    for node in graph.nodes():
-        if node in boundary_nodes:
-            graph.nodes[node]["distance"] = 0
-        else:
-            graph.nodes[node]["distance"] = np.inf
-    for step in range(len(graph.nodes())):
-        for node in graph.nodes():
-            neighbor_distance = min([graph.nodes[x]["distance"] for x in graph.neighbors(node)]) + 1
-            new_distance = min(neighbor_distance, graph.nodes[node]["distance"])
-            graph.nodes[node]["distance"] = new_distance
-    return graph
+    boundary_nodes = set([x[0] for x in boundary_edges] + [x[1] for x in boundary_edges])
+    for node in boundary_nodes:
+        graph.nodes[node]['distance'] = 0
 
-def compute_cross_edge(graph,partition):
-    cross_list = []
-    for n in graph.edges:
-        if Partition.crosses_parts(partition,n):
-            cross_list.append(n)
-    return cross_list
+    visited = set(boundary_nodes)
+    prev_set = boundary_nodes
+    count = 0
+    while len(visited) < len(graph.nodes):
+        count += 1
+        new_set = set([])
+        for node in prev_set:
+            for neighbor in graph.neighbors(node):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    new_set.add(neighbor)
+                    graph.nodes[neighbor]['distance'] = count
+        prev_set = new_set
+
+def compute_cross_edges(partition):
+    return set([edge for edge in partition.graph.edges if Partition.crosses_parts(partition, edge)])

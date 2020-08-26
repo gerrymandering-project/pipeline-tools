@@ -1,9 +1,10 @@
 import facefinder
-#from secret_matamandering import *
-
 import matplotlib.pyplot as plt
-
+import time
+from multiprocessing import Pool, Value
 from functools import partial
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from collections import defaultdict
 import networkx as nx
 import numpy as np
 import copy
@@ -11,6 +12,8 @@ import random
 import math
 import json
 import sys
+import os
+import traceback
 
 from gerrychain import Graph
 from gerrychain import MarkovChain
@@ -26,24 +29,26 @@ from gerrychain.proposals import recom
 from gerrychain.tree import recursive_tree_part
 
 
-def face_sierpinski_mesh(graph, special_faces):
+def face_sierpinski_mesh(partition, special_faces):
     """'Sierpinskifies' certain faces of the graph by adding nodes and edges to
     certain faces.
 
     Args:
-        graph (Gerrychain Graph): graph object that edges will be added to
+        partition (Gerrychain Partition): partition object which contain assignment
+        and whose graph will have edges and nodes added to
         special_faces (list): list of faces that we want to add node/edges to
 
     Raises:
         RuntimeError if SIERPINSKI_POP_STYLE of config file is neither 'uniform'
         nor 'zero'
-
-    TODO:
-        Add parameter for depth of sierpinskification
     """
 
+    graph = partition.graph
     # Get maximum node label.
     label = max(list(graph.nodes()))
+    # Assign each node to its district in partition
+    for node in graph.nodes():
+        graph.nodes[node][config['ASSIGN_COL']] = partition.assignment[node]
 
     for face in special_faces:
         neighbors = [] #  Neighbors of face
@@ -61,19 +66,23 @@ def face_sierpinski_mesh(graph, special_faces):
         angles = [float(np.arctan2(x[0], x[1])) for x in locations]
         neighbors.sort(key=dict(zip(neighbors, angles)).get)
 
-        connections = [] # List of all new nodes added
+        newNodes = []
+        newEdges = []
         # For each consecutive pair of nodes, remove their edge, create a new
         # node at their average position, and connect edge node to the new node:
         for vertex, next_vertex in zip(neighbors, neighbors[1:] + [neighbors[0]]):
             label += 1
             # Add new node to graph with corresponding label at the average position
-            # of vertex and next_vertex
+            # of vertex and next_vertex, and with 0 population and 0 votes
             graph.add_node(label)
             avgPos = (np.array(graph.nodes[vertex]['pos']) +
                       np.array(graph.nodes[next_vertex]['pos'])) / 2
             graph.nodes[label]['pos'] = avgPos
             graph.nodes[label][config['X_POSITION']] = avgPos[0]
             graph.nodes[label][config['Y_POSITION']] = avgPos[1]
+            graph.nodes[label][config['POP_COL']] = 0
+            graph.nodes[label][config['PARTY_A_COL']] = 0
+            graph.nodes[label][config['PARTY_B_COL']] = 0
 
             # For each new node, 'move' a third of the population, Party A votes,
             # and Party B votes from its two adjacent nodes which previously exists
@@ -81,49 +90,54 @@ def face_sierpinski_mesh(graph, special_faces):
             # its statistics with the two new nodes adjacent to it)
             if config['SIERPINSKI_POP_STYLE'] == 'uniform':
                 for vert in [vertex, next_vertex]:
-                    # Save original values if not done already
-                    if 'orig_pop' not in graph.nodes[vert]:
-                        graph.nodes[vert]['orig_pop'] = graph.nodes[vert][config['POP_COL']]
-                        graph.nodes[vert]['orig_A'] = graph.nodes[vert][config['PARTY_A_COL']]
-                        graph.nodes[vert]['orig_B'] = graph.nodes[vert][config['PARTY_B_COL']]
+                    for keyword, orig_keyword in zip(['POP_COL', 'PARTY_A_COL', 'PARTY_B_COL'],
+                                                     ['orig_pop', 'orig_A', 'orig_B']):
+                        # Save original values if not done already
+                        if orig_keyword not in graph.nodes[vert]:
+                            graph.nodes[vert][orig_keyword] = graph.nodes[vert][config[keyword]]
 
-                    # Set values of new node to 0 by default
-                    for keyword in ['POP_COL', 'PARTY_A_COL', 'PARTY_B_COL']:
-                        if config[keyword] not in graph.nodes[label]:
-                            graph.nodes[label][config[keyword]] = 0
+                        # Increment values of new node and decrement values of old nodes
+                        # by the appropriate amount.
+                        graph.nodes[label][config[keyword]] += graph.nodes[vert][orig_keyword] // 3
+                        graph.nodes[vert][config[keyword]] -= graph.nodes[vert][orig_keyword] // 3
 
-                    # Increment values of new node and decrement values of old nodes
-                    # by the appropriate amount
-                    graph.nodes[label][config['POP_COL']] += graph.nodes[vert]['orig_pop'] // 3
-                    graph.nodes[label][config['PARTY_A_COL']] += graph.nodes[vert]['orig_A'] // 3
-                    graph.nodes[label][config['PARTY_B_COL']] += graph.nodes[vert]['orig_B'] // 3
-                    for keyword in ['POP_COL', 'PARTY_A_COL', 'PARTY_B_COL']:
-                        graph.nodes[vert][config[keyword]] -= graph.nodes[label][config[keyword]]
+                # Assign new node to same district as neighbor. Note that intended
+                # behavior is that special_faces do not correspond to cut edges,
+                # and therefore both vertex and next_vertex will be of the same
+                # district.
+                graph.nodes[label][config['ASSIGN_COL']] = graph.nodes[vertex][config['ASSIGN_COL']]
 
             # Set the population and votes of the new nodes to zero. Do not change
-            # previously existing nodes.
+            # previously existing nodes. Assign to random neighbor.
             elif config['SIERPINSKI_POP_STYLE'] == 'zero':
-                graph.nodes[label][config['POP_COL']] = 0
-                graph.nodes[label][config['PARTY_A_COL']] = 0
-                graph.nodes[label][config['PARTY_A_COL']] = 0
+                graph.nodes[label][config['ASSIGN_COL']] =\
+                random.choice([graph.nodes[vertex][config['ASSIGN_COL']],
+                               graph.nodes[next_vertex][config['ASSIGN_COL']]]
+                             )
             else:
                 raise RuntimeError('SIERPINSKI_POP_STYLE must be "uniform" or "zero"')
 
             # Remove edge between consecutive nodes if it exists
-            try:
-                graph.remove_edge(vertex, next_index)
-            except:
-                pass
+            if graph.has_edge(vertex, next_vertex):
+                graph.remove_edge(vertex, next_vertex)
 
             # Add edge between both of the original nodes and the new node
             graph.add_edge(vertex, label)
+            newEdges.append((vertex, label))
             graph.add_edge(label, next_vertex)
+            newEdges.append((label, next_vertex))
             # Add node to connections
-            connections.append(label)
+            newNodes.append(label)
 
         # Add an edge between each consecutive new node
-        for vertex in range(len(connections)):
-            graph.add_edge(connections[vertex], connections[(vertex+1) % len(connections)])
+        for vertex in range(len(newNodes)):
+            graph.add_edge(newNodes[vertex], newNodes[(vertex+1) % len(newNodes)])
+            newEdges.append((newNodes[vertex], newNodes[(vertex+1) % len(newNodes)]))
+        # For each new edge of the face, set sibilings to be the tuple of all
+        # new edges
+        siblings = tuple(newEdges)
+        for edge in newEdges:
+            graph.edges[edge]['siblings'] = siblings
 
 
 def preprocessing(path_to_json):
@@ -144,48 +158,10 @@ def preprocessing(path_to_json):
 
     save_fig(graph, config['UNDERLYING_GRAPH_FILE'], config['WIDTH'])
 
-    # Cleans graph to be able to find planar dual
-    # TODO: why is this necessary?
-    #duality_cleaning(graph)
-
-    print('Making Dual')
     dual = facefinder.restricted_planar_dual(graph)
-    print('Made Dual')
 
     return graph, dual
 
-# TODO: What's going on here?
-def duality_cleaning(graph):
-    # Have to remove bad nodes in order for the duality thing to work properly
-    while True:
-        print("Clean Up Phase")
-        print(len(graph))
-        deg_one_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 1:
-                deg_one_nodes.append(v)
-        graph.remove_nodes_from(deg_one_nodes)
-
-        deg_2_nodes = []
-        for v in graph.nodes():
-            if graph.degree(v) == 2:
-                deg_2_nodes.append(v)
-
-        for v in deg_2_nodes:
-            smooth_node(graph, v)
-
-        # Exit loop if there are no more degree 1 or 2 nodes
-        if (not any([(graph.degree(node) == 1 or graph.degree(node) == 2) for node in graph.nodes()])):
-            break
-
-
-def smooth_node(graph, v):
-    neighbors = list(graph.neighbors(v))
-    graph.remove_node(v)
-    try:
-        graph.add_edge(neighbors[0], neighbors[1])
-    except:
-        print(neighbors)
 
 def step_num(partition):
     """Determines the step in a chain a given partion is. Used as an updater.
@@ -218,101 +194,8 @@ def save_fig(graph, path, size):
     plt.savefig(path, format=path.split('.')[-1])
     plt.close()
 
-def produce_gerrymanders(graph, tag, sample_size, chaintype):
-    """Runs a Recom chain, and saves the seats won histogram to a file and
-       returns the most Gerrymandered plans for both PartyA and PartyB
-
-    Args:
-        graph (Gerrychain Graph): graph to run chain on on
-        tag (String): tag added to filename of histogram
-        sample_size (int): total steps of chain
-        chaintype (String): indicates which proposal to be used to generate
-        spanning tree during Recom. Must be either "tree" or "uniform_tree"
-
-    Raises:
-        RuntimeError: If chaintype is not "tree" nor 'uniform_tree"
-
-    Returns:
-        left_mander [Gerrymander Partition]: the most gerrymandered plan for
-        PartyB generated by the chain
-        right_mander [Gerrymander Partition]: the most gerrymandered plan for
-        PartyA generated by the chain
-    """
-    for n in graph.nodes():
-        graph.nodes[n]["last_flipped"] = 0
-        graph.nodes[n]["num_flips"] = 0
-
-    election = Election(
-                        config['ELECTION_NAME'],
-                        {'PartyA': config['PARTY_A_COL'],
-                        'PartyB': config['PARTY_B_COL']}
-                        )
-
-    updaters = {'population': Tally(config['POP_COL']),
-                'cut_edges': cut_edges,
-                'step_num': step_num,
-                config['ELECTION_NAME'] : election
-                }
-    initial_partition = Partition(graph, assignment=config['ASSIGN_COL'], updaters=updaters)
-    ideal_population = sum(graph.nodes[x][config["POP_COL"]] for x in graph.nodes()) / len(initial_partition)
-    popbound = within_percent_of_ideal_population(initial_partition, config['POPULATION_EPSILON'])
-
-    # Determine proposal for generating spanning tree based upon parameter
-    if chaintype == "tree":
-        tree_proposal = partial(recom, pop_col=config["POP_COL"], pop_target=ideal_population,
-                           epsilon=config['POPULATION_EPSILON'], node_repeats=config['NODE_REPEATS'],
-                           method=facefinder.my_mst_bipartition_tree_random)
-
-    elif chaintype == "uniform_tree":
-        tree_proposal = partial(recom, pop_col=config["POP_COL"], pop_target=ideal_population,
-                           epsilon=config['POPULATION_EPSILON'], node_repeats=config['NODE_REPEATS'],
-                           method=facefinder.my_uu_bipartition_tree_random)
-    else:
-        print("Chaintype used: ", chaintype)
-        raise RuntimeError("Chaintype not recognized. Use 'tree' or 'uniform_tree' instead")
-
-    # Chain to be run
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=accept.always_accept, initial_state=initial_partition,
-                            total_steps=sample_size)
-
-    # Run chain while saving seats won for PartyA and the plans most gerrymandered
-    # for both PartyA and PartyB
-    seats_won_table = []
-    best_left = np.inf
-    best_right = -np.inf
-    for i, partition in enumerate(exp_chain):
-
-        if i % 100 == 0:
-            print('Step', i)
-
-        # Total seats won by PartyA
-        seats_won = partition[config['ELECTION_NAME']].seats('PartyA')
-        seats_won_table.append(seats_won)
-
-        # Saves copies of gerrymandered partitions
-        if seats_won < best_left:
-            best_left = seats_won
-            left_mander = Partition(graph=partition.graph, assignment=partition.assignment,
-                                    updaters=partition.updaters)
-        if seats_won > best_right:
-            best_right = seats_won
-            right_mander = Partition(graph=partition.graph, assignment=partition.assignment,
-                                    updaters=partition.updaters)
-
-    print('PartyA-mander:', best_right, 'PartyB-mander:', best_left)
-
-    # Save histogram to appropriate file
-    plt.figure()
-    plt.hist(seats_won_table, bins=len(initial_partition)+1)
-    name = './plots/large_sample/seats_hist/seats_histogram_orig' + tag + '.png'
-    plt.savefig(name)
-    plt.close()
-
-    return left_mander, right_mander
-
-
 def determine_special_faces(graph, dist):
-    """Determines the special faces, which are those nodes whose distance is 
+    """Determines the special faces, which are those nodes whose distance is
     at least k
 
     Args:
@@ -341,7 +224,7 @@ def determine_special_faces_random(graph, exp=1):
     max_dist = max(graph.nodes[node]['distance'] for node in graph.nodes())
     return [node for node in graph.nodes() if random.uniform < (graph.nodes[node]['distance'] / max_dist) ** exp]
 
-def metamander_around_partition(partition, dual, secret=False, special_param=2):
+def metamander_around_partition(partition, dual, tag, secret=False, special_param=2):
     """Metamanders around a partition by determining the set of special faces,
     and then sierpinskifying them.
 
@@ -354,9 +237,9 @@ def metamander_around_partition(partition, dual, secret=False, special_param=2):
     """
 
     graph = partition.graph
-#    facefinder.viz(partition, set([]))
-#    plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
-#    plt.close()
+    facefinder.viz(partition, set([]))
+    plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
+    plt.close()
 
     # Set of edges which cross from one district to another one
     cross_edges = facefinder.compute_cross_edges(partition)
@@ -371,118 +254,7 @@ def metamander_around_partition(partition, dual, secret=False, special_param=2):
     else:
         special_faces = determine_special_faces(dual, special_param)
     # Metamander around the partition by Sierpinskifying the special faces
-    face_sierpinski_mesh(graph, special_faces)
-    print("Made Metamander")
-#    print("assigning districts to metamander")
-#    total_pop = sum([graph.nodes[node]['population'] for node in graph])
-#    cddict = recursive_tree_part(graph, range(num_dist), total_pop / num_dist, "population", .01, 1)
-#    for node in graph.nodes():
-#        graph.nodes[node]['part'] = cddict[node]
-#    # sierp_partition = build_trivial_partition(g_sierpinsky)
-#    print("assigned districts")
-#    plt.figure()
-#    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=1, width=1,
-#            cmap=plt.get_cmap('jet'))
-#    plt.savefig("./plots/large_sample/sierpinsky_plots/sierpinsky_mesh" + tag + ".png", format='png')
-#    plt.close()
-#    return graph, k
-
-# TODO: Changed 10000 to 1000
-def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
-    # Samples k partitions of the graph, stores the cut edges and records them graphically
-    # Also stores vote histograms, and returns most extreme partitions.
-    print("producing sample")
-    updaters = {'population': Tally('population'),
-                'cut_edges': cut_edges,
-                'step_num': step_num,
-                }
-    for edge in graph.edges():
-        graph[edge[0]][edge[1]]['cut_times'] = 0
-
-    for n in graph.nodes():
-        # graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
-        graph.nodes[n]["last_flipped"] = 0
-        graph.nodes[n]["num_flips"] = 0
-
-    print("set up chain")
-    ideal_population = sum(graph.nodes[x]["population"] for x in graph.nodes()) / k
-    initial_partition = Partition(graph, assignment='part', updaters=updaters)
-    pop1 = .05
-    print("popbound")
-    popbound = within_percent_of_ideal_population(initial_partition, pop1)
-
-    if chaintype == "tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=facefinder.my_mst_bipartition_tree_random)
-
-    elif chaintype == "uniform_tree":
-        tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=pop1,
-                                node_repeats=1, method=facefinder.my_uu_bipartition_tree_random)
-    else:
-        print("Chaintype used: ", chaintype)
-        raise RuntimeError("Chaintype not recongized. Use 'tree' or 'uniform_tree' instead")
-
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=accept.always_accept, initial_state=initial_partition,
-                            total_steps=sample_size)
-
-    z = 0
-    num_cuts_list = []
-    seats_won_table = []
-    best_left = np.inf
-    best_right = -np.inf
-    print("begin chain")
-    for part in exp_chain:
-
-        # if z % 100 == 0:
-        z += 1
-        print("step ", z)
-        seats_won = 0
-
-        for edge in part["cut_edges"]:
-            graph[edge[0]][edge[1]]["cut_times"] += 1
-        for i in range(k):
-            rep_votes = 0
-            dem_votes = 0
-            for n in graph.nodes():
-                if part.assignment[n] == i:
-                    rep_votes += graph.nodes[n]["EL16G_PR_R"]
-                    dem_votes += graph.nodes[n]["EL16G_PR_D"]
-            total_seats = int(rep_votes > dem_votes)
-            seats_won += total_seats
-        # total seats won by rep
-        seats_won_table.append(seats_won)
-        # save gerrymandered partitionss
-        if seats_won < best_left:
-            best_left = seats_won
-            left_mander = copy.deepcopy(part.parts)
-        if seats_won > best_right:
-            best_right = seats_won
-            right_mander = copy.deepcopy(part.parts)
-        # print("finished round"
-
-    print("max", best_right, "min:", best_left)
-
-    plt.figure()
-    plt.hist(seats_won_table, bins=10)
-    mean = sum(seats_won_table) / len(seats_won_table)
-    std = np.std(seats_won_table)
-    # plt.close()
-    # title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std)
-    # plt.title(title)
-    # name = "./plots/seats_hist/seats_histogram" + tag + ".png"
-    # plt.savefig(name)
-    # plt.close()
-
-    # edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
-    #
-    # plt.figure()
-    # nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=0,
-    #         edge_color=edge_colors, node_shape='s',
-    #         cmap='magma', width=1)
-    # plt.savefig("./plots/edges_plots/edges" + tag + ".png")
-    # plt.close()
-
-    return mean, std, graph
+    face_sierpinski_mesh(partition, special_faces)
 
 def run_chain(init_part, chaintype, length, ideal_population):
     """Runs a Recom chain, and saves the seats won histogram to a file and
@@ -503,8 +275,12 @@ def run_chain(init_part, chaintype, length, ideal_population):
         right_mander [Gerrymander Partition]: the most gerrymandered plan for
         PartyA generated by the chain
     """
-    for edge in init_part.graph.edges():
-        init_part.graph.edges[edge[0], edge[1]]['cut_times'] = 0
+    graph = init_part.graph
+    for edge in graph.edges():
+        graph.edges[edge]['cut_times'] = 0
+        graph.edges[edge]['sibling_cuts'] = 0
+        if 'siblings' not in graph.edges[edge]:
+            graph.edges[edge]['siblings'] = tuple([edge])
 
     popbound = within_percent_of_ideal_population(init_part, config['EPSILON'])
 
@@ -526,153 +302,225 @@ def run_chain(init_part, chaintype, length, ideal_population):
     chain = MarkovChain(tree_proposal, Validator([popbound]), accept=accept.always_accept, initial_state=init_part,
                             total_steps=length)
 
-    # Run chain while saving each partition and counting how many times each
-    # edge is cut.
-    arr = []
-    for i, partition in enumerate(chain):
-        if i % 10 == 0:
-            print(i)
+    # Run chain, save each desired statistic, and keep track of cuts. Save most
+    # left gerrymandered partition
+#    statistics = {statistic : [] for statistic in config['ELECTION_STATISTICS']}
+#    minWins, leftMander = float('inf'), None
+#    for i, partition in enumerate(chain):
+#        if i % 100 == 0:
+#            print(i)
+#        for edge in partition["cut_edges"]:
+#            graph.edges[edge]['cut_times'] += 1
+#            for sibling in graph.edges[edge]['siblings']:
+#                graph.edges[sibling]['sibling_cuts'] += 1
+#        for statistic in config['ELECTION_STATISTICS']:
+#            if (statistic=="seats" or statistic=="won"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].seats('PartyA'))
+#            elif (statistic=="efficiency_gap"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].efficiency_gap())
+#            elif (statistic=="mean_median"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].mean_median())
+#            elif (statistic=="mean_thirdian"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].mean_thirdian())
+#            elif (statistic=="partisan_bias"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].partison_bias())
+#            elif (statistic=="partisan_gini"):
+#                statistics[statistic].append(partition[config['ELECTION_NAME']].partisan_gini())
+#        wins = partition[config['ELECTION_NAME']].seats('PartyA')
+#        if wins < minWins:
+#            left_mander = partition
+#            minWins = wins
+#    return statistics, left_mander
+    partitions = []
+    for partition in chain:
         for edge in partition["cut_edges"]:
-            init_part.graph[edge[0]][edge[1]]["cut_times"] += 1
-        arr.append(partition)
-    return arr
+            graph.edges[edge]['cut_times'] += 1
+            for sibling in graph.edges[edge]['siblings']:
+                graph.edges[sibling]['sibling_cuts'] += 1
+        partitions.append(partition)
+    return partitions
 
-def saveHistogram(partitions, bins, tag):
-    """Saves a list of numbers as a histogram in the appropriate location
+def drawGraph(graph, property, tag):
+    """Draws graph with edges colored according to the value of their chosen
+    property. Saves to file.
 
     Args:
-        partitions (list): list of Gerrychain Partitions
-        bins (int): number of bins of histogram
-        tag (String): tag to add to filename
+        graph (Networkx Graph): graph to draw and save
+        property (String): property of edges to use for edge colormap
+        tag (String): tag added to filename to identify graph
     """
-    print('entered function')
-    # Determine table of data to save
-    table = [partition[config['ELECTION_NAME']].seats('PartyA') for partition in samples]
-    mean = sum(table) / len(table)
-    std = np.std(table, ddof=1)
-    # Save histogram to appropriate file
-    plt.figure()
-    plt.hist(table, bins=bins)
-    title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std)
-    plt.title(title)
-    name = "./plots/seats_hist/seats_histogram" + tag + ".png"
-    plt.savefig(name)
-    plt.close()
-
-def drawGraph(graph, tag):
-    edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
-
+    edge_colors = [graph.edges[edge][property] for edge in graph.edges()]
+    vmin = min(edge_colors)
+    vmax = max(edge_colors)
+    cmap = plt.get_cmap(config['COLORMAP1'])
     plt.figure()
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=0,
             edge_color=edge_colors, node_shape='s',
-            cmap='magma', width=1)
+            edge_cmap=cmap, width=1, edge_vmin=vmin, edge_vmax=vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin = vmin, vmax=vmax))
+    sm._A = []
+    plt.colorbar(sm, shrink=0.8)
     plt.savefig("./plots/edges_plots/edges" + tag + ".png")
     plt.close()
 
-def main():
+def drawDoubleGraph(graph, property, tag):
+    """Draws graph with edges colored according to the value of their chosen
+    property and whether or not they are from a special face. Saves to file.
 
-    # left_mander, right_mander = produce_gerrymanders(graph, 12, '_nc', 100, 'tree')
-    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
-    parts = list(set([graph.nodes[node][config['ASSIGN_COL']] for node in graph.nodes()]))
-    ideal_pop = sum([graph.nodes[node][config['POP_COL']] for node in graph.nodes()]) / len(parts)
-    election = Election(
-                        config['ELECTION_NAME'],
-                        {'PartyA': config['PARTY_A_COL'],
-                        'PartyB': config['PARTY_B_COL']}
-                        )
+    Identical to drawGraph() excepts uses two different edge colormaps for whether
+    or not an edge comes from a special face.
 
-    updaters = {'population': Tally(config['POP_COL']),
-                'cut_edges': cut_edges,
-                'step_num': step_num,
-                config['ELECTION_NAME'] : election
-                }
-    mean_table = []
-    std_table = []
-    # metamander, k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER", num_dist, False)
-    #
-    # produce_sample(metamander, k, '_nc')
-    max_mean = 0
-    min_mean = math.inf
-    # TODO: Changed 500 to 15
-    for i in range(config['NUM_EXPERIMENTS']):
-        graph_copy = copy.deepcopy(graph)
-        dual_copy = copy.deepcopy(dual)
-        print("Searching for initial partition")
-        # Note: doing this instead of using default assignment slows things down
-        partition = Partition(graph=graph_copy, assignment=config['ASSIGN_COL'], updaters=updaters)
-        run = run_chain(partition, config['CHAIN_TYPE'], config['FIND_GERRY_LENGTH'], ideal_pop)
-        firstTable = [partition[config['ELECTION_NAME']].seats('PartyA') for partition in run]
-        print('Ran chain')
-        left_mander = min(run, key=lambda x: x[config['ELECTION_NAME']].seats('PartyA'))
-        print('Found left mander')
-        metamander_around_partition(partition, dual_copy, False, 2)
-        # Refresh partition
-        assign = recursive_tree_part(graph_copy, parts, ideal_pop, config['POP_COL'],
-                                     config['EPSILON'], config['NODE_REPEATS'])
+    Args:
+        graph (Networkx Graph): graph to draw and save
+        property (String): property of edges to use for edge colormap
+        tag (String): tag added to filename to identify graph
+    """
+    special_edges = [edge for edge in graph.edges() if len(graph.edges[edge]['siblings']) > 1]
+    orig_edges = [edge for edge in graph.edges() if len(graph.edges[edge]['siblings']) == 1]
+
+    G_special = graph.edge_subgraph(special_edges)
+    G_orig = graph.edge_subgraph(orig_edges)
+
+    special_edge_colors = [graph.edges[edge][property] for edge in special_edges]
+    orig_edge_colors = [graph.edges[edge][property] for edge in orig_edges]
+    vmin = min(min(special_edge_colors), min(orig_edge_colors))
+    vmax = max(max(special_edge_colors), max(orig_edge_colors))
+    cmap1 = plt.get_cmap(config['COLORMAP1'])
+    cmap2 = plt.get_cmap(config['COLORMAP2'])
+    plt.figure()
+    nx.draw(G_orig, pos=nx.get_node_attributes(graph, 'pos'), node_size=0,
+            edge_color=orig_edge_colors, node_shape='s',
+            edge_cmap=cmap1, width=1, edge_vmin=vmin, edge_vmax=vmax)
+    nx.draw(G_special, pos=nx.get_node_attributes(graph, 'pos'), node_size=0,
+            edge_color=special_edge_colors, node_shape='s',
+            edge_cmap=cmap2, width=1, edge_vmin=vmin, edge_vmax=vmax)
+    sm1 = plt.cm.ScalarMappable(cmap=cmap1, norm=plt.Normalize(vmin = vmin, vmax=vmax))
+    sm1._A = []
+    clb_orig = plt.colorbar(sm1, shrink=0.8)
+    clb_orig.ax.set_title('Original')
+    sm2 = plt.cm.ScalarMappable(cmap=cmap2, norm=plt.Normalize(vmin = vmin, vmax=vmax))
+    sm2._A = []
+    clb_special = plt.colorbar(sm2, shrink=0.8)
+    clb_special.ax.set_title('Special')
+    plt.savefig("./plots/edges_plots/edges" + tag + ".png")
+    plt.close()
+
+def saveRunStatistics(partitions, tag):
+    """Saves the election statistics of a given list of partitions to a JSON file
+
+    Args:
+        partitions (Iterable): Iterable of partitions to save election statistics of
+        tag (String): tag added to filename to identify run
+    """
+    statistics = {statistic : [] for statistic in config['ELECTION_STATISTICS']}
+    for partition in partitions:
+        for statistic in config['ELECTION_STATISTICS']:
+            if (statistic=="seats" or statistic=="won"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].seats('PartyA'))
+            elif (statistic=="efficiency_gap"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].efficiency_gap())
+            elif (statistic=="mean_median"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].mean_median())
+            elif (statistic=="mean_thirdian"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].mean_thirdian())
+            elif (statistic=="partisan_bias"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].partison_bias())
+            elif (statistic=="partisan_gini"):
+                statistics[statistic].append(partition[config['ELECTION_NAME']].partisan_gini())
+
+    with open('generated_data/run_statistics_' + tag, 'w') as outfile:
+        try:
+            json.dump(statistics, outfile)
+        except:
+            print('Unable to save run statistics to file.')
+
+def saveGraphStatistics(graph, tag):
+    """Saves the statistics of a graph to JSON file.
+
+    Args:
+        graph (Networkx Graph): graph to have data saved
+        tag ([type]): tag added to filename to identify graph
+    """
+    data = [(edge, graph.edges[edge]['cut_times'], graph.edges[edge]['sibling_cuts']) for edge in graph.edges()]
+    with open('generated_data/graph_statistics_' + tag, 'w') as outfile:
+        try:
+            json.dump(data, outfile)
+        except:
+            print('Unable to save graph statistics to file.')
+
+def savePartition(partition, tag):
+    """Saves a partition to a JSON file
+
+    Args:
+        partition (Gerrychain Partition): partition to save
+        tag (String): tag added to filename to identify partition
+    """
+    with open('generated_data/partition_' + tag, 'w') as outfile:
+        json.dump(partition.assignment.to_dict(), outfile)
+
+def main(configFileName, id):
+    try:
+        timeBeg = time.time()
+        print('Experiment', id, 'has begun')
+
+        with open(configFileName, 'r') as json_file:
+            try:
+                global config
+                config = json.load(json_file)
+            except:
+                print("Unable to load JSON file")
+                sys.exit()
+
+        # Get graph and dual graph
+        graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
+        # List of districts in original graph
+        parts = list(set([graph.nodes[node][config['ASSIGN_COL']] for node in graph.nodes()]))
+        # Ideal population of districts
+        ideal_pop = sum([graph.nodes[node][config['POP_COL']] for node in graph.nodes()]) / len(parts)
+        election = Election(
+                            config['ELECTION_NAME'],
+                            {'PartyA': config['PARTY_A_COL'],
+                            'PartyB': config['PARTY_B_COL']}
+                            )
+
         updaters = {'population': Tally(config['POP_COL']),
                     'cut_edges': cut_edges,
                     'step_num': step_num,
                     config['ELECTION_NAME'] : election
                     }
-        print('Found new intial partition')
-        partition = Partition(graph=graph_copy, assignment=assign, updaters=updaters)
-        samples = run_chain(partition, config['CHAIN_TYPE'], config['SAMPLE_META_LENGTH'], ideal_pop)
-        print('Ran chain')
-        table = [partition[config['ELECTION_NAME']].seats('PartyA') for partition in samples]
-        saveHistogram(samples, range(len(parts)+1), config['HISTOGRAM_TAG'])
-        drawGraph(partition.graph, config['GRAPH_TAG'])
-        print('Saved images')
 
-        edge_colors = [partition.graph[edge[0]][edge[1]]["cut_times"] for edge in graph_copy.edges()]
+        graph_copy = copy.deepcopy(graph)
+        dual_copy = copy.deepcopy(dual)
+        partition = Partition(graph=graph_copy, assignment=config['ASSIGN_COL'], updaters=updaters)
+        # Run Chain to search for a gerrymander
+        gerry_search_run = run_chain(partition, config['CHAIN_TYPE'], config['FIND_GERRY_LENGTH'], ideal_pop)
+        left_mander = min(gerry_search_run, key=lambda x: x[config['ELECTION_NAME']].seats('PartyA'))
+        savePartition(left_mander, config['LEFT_MANDER_TAG'] + id)
+        metamander_around_partition(partition, dual_copy, config['TARGET_TAG'] + id, False, 2)
+        # Refresh assignment and election of partition
+        updaters[config['ELECTION_NAME']] = Election(
+                                                     config['ELECTION_NAME'],
+                                                     {'PartyA': config['PARTY_A_COL'],
+                                                      'PartyB': config['PARTY_B_COL']}
+                                                    )
+        partition = Partition(graph=graph_copy, assignment=config['ASSIGN_COL'], updaters=updaters)
+        metamandered_run = run_chain(partition, config['CHAIN_TYPE'], config['SAMPLE_META_LENGTH'], ideal_pop)
+        # Save data from experiment to JSON files
+        drawGraph(partition.graph, 'cut_times', config['GRAPH_TAG'] + '_single_raw_' + id)
+        drawGraph(partition.graph, 'sibling_cuts', config['GRAPH_TAG'] + '_single_adjusted_' + id)
+        drawDoubleGraph(partition.graph, 'cut_times', config['GRAPH_TAG'] + '_double_raw_' + id)
+        drawDoubleGraph(partition.graph, 'sibling_cuts', config['GRAPH_TAG'] + '_double_adjusted_' + id)
+        saveRunStatistics(metamandered_run, config['RUN_STATISTICS_TAG'] + id)
+        saveGraphStatistics(partition.graph, config['GRAPH_STATISTICS_TAG'] + id)
 
-        mean = sum(table) / len(table)
-        std = np.std(table, ddof=1)
-
-        title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std) + " Number:" + str(i)
-        plt.title(title)
-        if mean > max_mean:
-            name = "./plots/extreme_shift/large_sample/seats_histogram" + "MaxMean_Left_random" + ".png"
-            plt.savefig(name)
-            plt.close()
-
-            plt.figure()
-            nx.draw(partition.graph, pos=nx.get_node_attributes(partition.graph, 'pos'), node_size=0,
-                    edge_color=edge_colors, node_shape='s',
-                    cmap='magma', width=1)
-            plt.savefig("./plots/extreme_shift/large_sample/edges" + "MaxMean_Left_random" + ".png")
-            plt.close()
-            max_mean = mean
-        elif mean < min_mean:
-            name = "./plots/extreme_shift/large_sample/seats_histogram" + "MinMean_Left_random" + ".png"
-            plt.savefig(name)
-            plt.close()
-
-            plt.figure()
-            nx.draw(partition.graph, pos=nx.get_node_attributes(partition.graph, 'pos'), node_size=0,
-                    edge_color=edge_colors, node_shape='s',
-                    cmap='magma', width=1)
-            plt.savefig("./plots/extreme_shift/large_sample/edges" + "MinMean_Left_random" + ".png")
-            plt.close()
-            min_mean = mean
-
-        mean_table.append(mean)
-        std_table.append(std)
-        print("Finished " + str(i) + " sample")
-
-    plt.figure()
-    plt.subplot(121)
-    plt.hist(mean_table, bins=10)
-    mean_table.sort()
-    plt.title("min mean: " + str(float("{:.2f}".format(mean_table[0]))) + " max mean: " + str(float("{:.2f}".format(mean_table[-1]))))
-
-    plt.subplot(122)
-    plt.hist(std_table, bins=10)
-    std_table.sort()
-    plt.title("min std: " + str(float("{:.2f}".format(std_table[0]))) + " max std: " + str(float("{:.2f}".format(std_table[-1]))))
-    plt.savefig("./plots/extreme_shift/tables_Left_random.png", format='png')
-    plt.close()
+        print('Experiment', id, 'completed in {:f} seconds'.format(time.time() - timeBeg))
+    except Exception as e:
+        track = traceback.format_exc()
+        print(track)
+        print('Experiment', id, 'failed to complete')
 
 if __name__ == '__main__':
+    timeStart = time.time()
     # Loads JSON config file
     if len(sys.argv) > 2:
         print("Provide single filename")
@@ -690,4 +538,9 @@ if __name__ == '__main__':
             print("Unable to load JSON file")
             sys.exit()
 
-    main()
+    p = Pool(config['NUM_PROCESSORS'])
+    for i in range(config['NUM_EXPERIMENTS']):
+        p.apply_async(main, args = (configFileName, str(i)))
+    p.close()
+    p.join()
+    print('All experiments completed in {:f} seconds'.format(time.time() - timeStart))
