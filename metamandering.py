@@ -162,24 +162,6 @@ def preprocessing(path_to_json):
 
     return graph, dual
 
-
-def step_num(partition):
-    """Determines the step in a chain a given partion is. Used as an updater.
-
-    Args:
-        partition (Gerrychain Partition): partition in question
-
-    Returns:
-        int: step in chain
-    """
-    parent = partition.parent
-
-    if not parent:
-        return 0
-
-    return parent["step_num"] + 1
-
-
 def save_fig(graph, path, size):
     """Saves graph to file in desired formed
 
@@ -429,6 +411,8 @@ def saveRunStatistics(partitions, tag):
         try:
             json.dump(statistics, outfile)
         except:
+            track = traceback.format_exc()
+            print(track)
             print('Unable to save run statistics to file.')
 
 def saveGraphStatistics(graph, tag):
@@ -443,6 +427,8 @@ def saveGraphStatistics(graph, tag):
         try:
             json.dump(data, outfile)
         except:
+            track = traceback.format_exc()
+            print(track)
             print('Unable to save graph statistics to file.')
 
 def savePartition(partition, tag):
@@ -453,29 +439,29 @@ def savePartition(partition, tag):
         tag (String): tag added to filename to identify partition
     """
     with open('generated_data/partition_{}.json'.format(tag), 'w') as outfile:
-        json.dump(partition.assignment.to_dict(), outfile)
+        try:
+            json.dump(partition.assignment.to_dict(), outfile)
+        except:
+            track = traceback.format_exc()
+            print(track)
+            print('Unable to save partition to file')
 
-def main(configFileName, id):
+def main(config_data, id):
     """Runs a single experiment with the given config file. Loads a graph,
     runs a Chain to search for a Gerrymander, metamanders around that partition,
     runs another chain, and then saves the generated data.
 
     Args:
-        configFileName (String): filename of config file
+        config_data (Object): configuration of experiment loaded from JSON file
         id (String): id of experiment, used in tags to differentiate between
         experiments
     """
     try:
         timeBeg = time.time()
         print('Experiment', id, 'has begun')
-
-        with open(configFileName, 'r') as json_file:
-            try:
-                global config
-                config = json.load(json_file)
-            except:
-                print("Unable to load JSON file")
-                sys.exit()
+        # Save configuration into global variable
+        global config
+        config = config_data
 
         # Get graph and dual graph
         graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
@@ -491,7 +477,6 @@ def main(configFileName, id):
 
         updaters = {'population': Tally(config['POP_COL']),
                     'cut_edges': cut_edges,
-                    'step_num': step_num,
                     config['ELECTION_NAME'] : election
                     }
 
@@ -517,11 +502,12 @@ def main(configFileName, id):
         saveRunStatistics(metamandered_run, config['RUN_STATISTICS_TAG'] + id)
         saveGraphStatistics(partition.graph, config['GRAPH_STATISTICS_TAG'] + id)
 
-        print('Experiment', id, 'completed in {:f} seconds'.format(time.time() - timeBeg))
+        print('Experiment {} completed in {:.2f} seconds'.format(id, time.time() - timeBeg))
     except Exception as e:
+        # Print notification if any experiment fails to complete
         track = traceback.format_exc()
         print(track)
-        print('Experiment', id, 'failed to complete')
+        print('Experiment {} failed to complete after {:.2f} seconds'.format(id, time.time() - timeBeg))
 
 if __name__ == '__main__':
     timeStart = time.time()
@@ -534,17 +520,18 @@ if __name__ == '__main__':
     else:
         configFileName = './config.json'
 
+
     with open(configFileName, 'r') as json_file:
         try:
-            global config
             config = json.load(json_file)
         except:
             print("Unable to load JSON file")
             sys.exit()
 
-    p = Pool(config['NUM_PROCESSORS'])
+
+    pool = Pool(config['NUM_PROCESSORS'])
     for i in range(config['NUM_EXPERIMENTS']):
-        p.apply_async(main, args = (configFileName, str(i)))
-    p.close()
-    p.join()
-    print('All experiments completed in {:f} seconds'.format(time.time() - timeStart))
+        pool.apply_async(main, args = (config, str(i)))
+    pool.close()
+    pool.join()
+    print('All experiments completed in {:.2f} seconds'.format(time.time() - timeStart))
