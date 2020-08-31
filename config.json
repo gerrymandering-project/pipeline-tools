@@ -13,6 +13,8 @@
     "NODE_REPEATS" : 1,
     "SIERPINSKI_POP_STYLE" : "uniform",
     "CHAIN_TYPE" : "tree",
+    "SECRET" : false,
+    "META_PARAM" : 2,
     "NUM_EXPERIMENTS" : 25,
     "FIND_GERRY_LENGTH" : 1500,
     "SAMPLE_META_LENGTH" : 50000,
@@ -25,5 +27,5 @@
     "COLORMAP2" : "viridis",
     "ELECTION_STATISTICS" : ["seats", "efficiency_gap", "mean_median"],
     "GERRY_STATISTICS" : ["efficiency_gap", "seats"],
-    "NUM_PROCESSORS" : 4
+    "NUM_PROCESSORS" : 6
 }

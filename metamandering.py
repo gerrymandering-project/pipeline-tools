@@ -469,6 +469,7 @@ def main(config_data, id):
         parts = list(set([graph.nodes[node][config['ASSIGN_COL']] for node in graph.nodes()]))
         # Ideal population of districts
         ideal_pop = sum([graph.nodes[node][config['POP_COL']] for node in graph.nodes()]) / len(parts)
+        # Initialize partition
         election = Election(
                             config['ELECTION_NAME'],
                             {'PartyA': config['PARTY_A_COL'],
@@ -482,9 +483,11 @@ def main(config_data, id):
 
         partition = Partition(graph=graph, assignment=config['ASSIGN_COL'], updaters=updaters)
         # Run Chain to search for a gerrymander, and get it
-        mander = getGerry(run_chain(partition, config['CHAIN_TYPE'], config['FIND_GERRY_LENGTH'], ideal_pop, id + 'a'))
+        mander = getGerry(run_chain(partition, config['CHAIN_TYPE'],
+                          config['FIND_GERRY_LENGTH'], ideal_pop, id + 'a'))
         savePartition(mander, config['LEFT_MANDER_TAG'] + id)
-        metamander_around_partition(partition, dual, config['TARGET_TAG'] + id, False, 2)
+        # Metamanders around the found gerrymander
+        metamander_around_partition(mander, dual, config['TARGET_TAG'] + id, config['SECRET'], config['META_PARAM'])
         # Refresh assignment and election of partition
         updaters[config['ELECTION_NAME']] = Election(
                                                      config['ELECTION_NAME'],
@@ -528,7 +531,7 @@ if __name__ == '__main__':
             print("Unable to load JSON file")
             sys.exit()
 
-
+    # Run NUM_EXPERIMENTS experiments using NUM_PROCESSORS processors
     pool = Pool(config['NUM_PROCESSORS'])
     for i in range(config['NUM_EXPERIMENTS']):
         pool.apply_async(main, args = (config, str(i)))
