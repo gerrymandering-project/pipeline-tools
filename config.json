@@ -23,6 +23,7 @@
     "GRAPH_STATISTICS_TAG" : "NC_GRAPH_STATISTICS",
     "COLORMAP1" : "magma",
     "COLORMAP2" : "viridis",
-    "ELECTION_STATISTICS" : ["seats", "efficiency_gap"],
+    "ELECTION_STATISTICS" : ["seats", "efficiency_gap", "mean_median"],
+    "GERRY_STATISTICS" : ["efficiency_gap", "seats"],
     "NUM_PROCESSORS" : 4
 }
