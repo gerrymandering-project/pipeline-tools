@@ -99,11 +99,11 @@ for i in range(steps):
     #check if sign is wrong, unsure 
     #rand < min(1, P(x')/P(x))
     #    
-    energy = statistics.mean(seats_won_for_republicans)
+    score = statistics.mean(seats_won_for_republicans)
     
     
     ##This is the acceptance step of the Metropolis-Hasting's algorithm.
-    if random.random() < min(1, (math.exp(energy) / chain_output['score'][z - 1])**temperature ):
+    if random.random() < min(1, (math.exp(score) / chain_output['score'][z - 1])**(1/temperature) ):
         chain_output['dem_seat_data'].append(seats_won_for_democrats)
         chain_output['rep_seat_data'].append(seats_won_for_republicans)
         chain_output['score'].append(math.exp(statistics.mean(seats_won_for_republicans)))
