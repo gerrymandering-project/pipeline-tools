@@ -69,7 +69,9 @@ for i in range(steps):
     popbound = within_percent_of_ideal_population(initial_partition, epsilon)
     tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=epsilon,
                                 node_repeats=1, method=my_mst_bipartition_tree_random)
-    #make new function
+    
+    
+    #make new function -- this computes the energy of the current map
     exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition, total_steps=gerrychain_steps)
     seats_won_for_republicans = []
     seats_won_for_democrats = []
@@ -91,8 +93,12 @@ for i in range(steps):
         seats_won_for_democrats.append(dem_seats_won)
     #check if sign is wrong, unsure 
     #rand < min(1, P(x')/P(x))
-    #
-    if random.random() < min(1, math.exp(statistics.mean(seats_won_for_republicans)) / chain_output['score'][z - 1]):
+    #    
+    energy = statistics.mean(seats_won_for_republicans)
+    
+    
+    ##This is the acceptance step of the Metropolis-Hasting's algorithm.
+    if random.random() < min(1, math.exp(energy) / chain_output['score'][z - 1]):
         chain_output['dem_seat_data'].append(seats_won_for_democrats)
         chain_output['rep_seat_data'].append(seats_won_for_republicans)
         chain_output['score'].append(math.exp(statistics.mean(seats_won_for_republicans)))
