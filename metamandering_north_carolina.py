@@ -297,14 +297,9 @@ def assign_special_faces(graph, k):
             special_faces.append(node)
     return special_faces
 
-def assign_special_faces_random(graph):
-    max_dist = max(graph.nodes[node]["distance"] for node in graph.nodes())
-    special_faces = []
-    for node in graph.nodes():
-        prob = graph.nodes[node]['distance'] / max_dist
-        if random.uniform(0, 1) < prob:
-            special_faces.append(node)
-    return special_faces
+
+def metamander_around_partition(graph, dual, target_partition, tag,num_dist):
+
 
 def metamander_around_partition(graph, dual, target_partition, tag, num_dist, secret):
     updaters = {'population': Tally('population'),
@@ -359,11 +354,13 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
             g_sierpinsky.nodes[node]['EL16G_PR_R'] = 0
         ##Need to add the voting data
     print("assigning districts to metamander")
-    total_pop = sum([g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
-    cddict = recursive_tree_part(graph, range(num_dist), total_pop / num_dist, "population", .01, 1)
+
+    total_pop = sum( [ g_sierpinsky.nodes[node]['population'] for node in g_sierpinsky])
+    cddict = recursive_tree_part(graph,range(num_dist),total_pop/num_dist,"population", .01,1)
     for node in graph.nodes():
         graph.nodes[node]['part'] = cddict[node]
-    # sierp_partition = build_trivial_partition(g_sierpinsky)
+    #sierp_partition = build_trivial_partition(g_sierpinsky)
+
     print("assigned districts")
     plt.figure()
     nx.draw(g_sierpinsky, pos=nx.get_node_attributes(g_sierpinsky, 'pos'), node_size=1, width=1,
@@ -372,10 +369,11 @@ def metamander_around_partition(graph, dual, target_partition, tag, num_dist, se
     plt.close()
     return g_sierpinsky, k
 
-# TODO: Changed 10000 to 1000
-def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
-    # Samples k partitions of the graph, stores the cut edges and records them graphically
-    # Also stores vote histograms, and returns most extreme partitions.
+
+def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
+    #Samples k partitions of the graph, stores the cut edges and records them graphically
+    #Also stores vote histograms, and returns most extreme partitions.
+
     print("producing sample")
     updaters = {'population': Tally('population'),
                 'cut_edges': cut_edges,
@@ -384,12 +382,14 @@ def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
     for edge in graph.edges():
         graph[edge[0]][edge[1]]['cut_times'] = 0
 
-        for n in graph.nodes():
-            # graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
-            graph.nodes[n]["last_flipped"] = 0
-            graph.nodes[n]["num_flips"] = 0
+    
+    for n in graph.nodes():
+        #graph.nodes[n]["population"] = 1 #graph.nodes[n]["POP10"] #This is something gerrychain will refer to for checking population balance
+        graph.nodes[n]["last_flipped"] = 0
+        graph.nodes[n]["num_flips"] = 0
     print("set up chain")
-    ideal_population = sum(graph.nodes[x]["population"] for x in graph.nodes()) / k
+    ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
+
     initial_partition = Partition(graph, assignment='part', updaters=updaters)
     pop1 = .05
     print("popbound")
@@ -406,8 +406,10 @@ def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
         print("Chaintype used: ", chaintype)
         raise RuntimeError("Chaintype not recongized. Use 'tree' or 'uniform_tree' instead")
 
-    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition,
-                            total_steps=sample_size)
+    
+    exp_chain = MarkovChain(tree_proposal, Validator([popbound]), accept=always_true, initial_state=initial_partition, total_steps=sample_size)
+    
+    
 
     z = 0
     num_cuts_list = []
@@ -417,9 +419,11 @@ def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
     print("begin chain")
     for part in exp_chain:
 
-        # if z % 100 == 0:
+
+        
         z += 1
-        print("step ", z)
+        if z % 100 == 0:
+            print("step ", z)
         seats_won = 0
 
         for edge in part["cut_edges"]:
@@ -438,13 +442,26 @@ def produce_sample(graph, k, tag, sample_size=500, chaintype='tree'):
         # save gerrymandered partitionss
         if seats_won < best_left:
             best_left = seats_won
-            left_mander = copy.deepcopy(part.parts)
+            #left_mander = copy.deepcopy(part.parts)
         if seats_won > best_right:
             best_right = seats_won
-            right_mander = copy.deepcopy(part.parts)
-        # print("finished round"
 
+            #right_mander = copy.deepcopy(part.parts)
+        #print("finished round"
+    
     print("max", best_right, "min:", best_left)
+    
+    plt.figure()
+    plt.hist(seats_won_table, bins = 10)
+    
+    name = "./plots/seats_histogram_metamander" + tag +".png"
+    plt.savefig(name)
+    plt.close()    
+        
+    edge_colors = [graph[edge[0]][edge[1]]["cut_times"] for edge in graph.edges()]
+    
+    pos=nx.get_node_attributes(graph, 'pos')
+    
 
     plt.figure()
     plt.hist(seats_won_table, bins=10)
@@ -492,27 +509,9 @@ def main():
     hold_graph = copy.deepcopy(graph)
     hold_dual = copy.deepcopy(dual)
     num_dist = 13
-    mean_table = []
-    std_table = []
-    # metamander, k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER", num_dist, False)
-    #
-    # produce_sample(metamander, k, '_nc')
-    max_mean = 0
-    min_mean = math.inf
-    # TODO: Changed 500 to 15
-    for i in range(1, 15):
-        left_mander, right_mander = produce_gerrymanders(hold_graph, 13, '_nc' + str(i), 1, 'tree')
-        metamander, k = metamander_around_partition(hold_graph, hold_dual, left_mander, '_ncS' + str(i) + "LEFTMANDER",
-                                                    num_dist, True)
-        mean, std, hold_graph = produce_sample(metamander, k, '_ncS' + str(i))
-        edge_colors = [hold_graph[edge[0]][edge[1]]["cut_times"] for edge in hold_graph.edges()]
 
-        title = 'mean: ' + str(mean) + ' standard deviation: ' + str(std) + " Number:" + str(i)
-        plt.title(title)
-        if mean > max_mean:
-            name = "./plots/extreme_shift/large_sample/seats_histogram" + "MaxMean_Left_random" + ".png"
-            plt.savefig(name)
-            plt.close()
+    metamander , k = metamander_around_partition(graph, dual, left_mander, '_nc' + "LEFTMANDER",num_dist)
+
 
             plt.figure()
             nx.draw(hold_graph, pos=nx.get_node_attributes(hold_graph, 'pos'), node_size=0,
