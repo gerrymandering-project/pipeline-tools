@@ -278,7 +278,8 @@ def test():
     dual = restricted_planar_dual(graph)
     draw_with_location(graph)
     draw_with_location(dual)
-
+def always_true(proposal):
+    return True
 def my_mst_bipartition_tree_random(
     graph,
     pop_col,
