@@ -69,16 +69,15 @@ for i in range(steps):
     step_graph = face_sierpinski_mesh(graph, special_faces)
 
     #need to create initial partition
+    
+    # This should be changed to induce the initial partition from the a partition of the original graph. @Matt
     cddict = recursive_tree_part(step_graph,range(k),totpop/k,"population", .01,1)
-    ####This should be changed to induce the initial partition from the a partition of the original graph.
-    
-    
-    
-    
     for node in graph.nodes():
-        graph.nodes[node]['part'] = cddict[node]
-    
+        graph.nodes[node]['part'] = cddict[node] 
     initial_partition = Partition(step_graph, assignment='part', updaters=updaters)
+    
+    
+    # Sets up Markov chain
     popbound = within_percent_of_ideal_population(initial_partition, epsilon)
     tree_proposal = partial(recom, pop_col="population", pop_target=ideal_population, epsilon=epsilon,
                                 node_repeats=1, method=my_mst_bipartition_tree_random)
@@ -104,14 +103,14 @@ for i in range(steps):
             dem_seats_won += total_seats_dem
         seats_won_for_republicans.append(rep_seats_won)
         seats_won_for_democrats.append(dem_seats_won)
-    #check if sign is wrong, unsure 
-    #rand < min(1, P(x')/P(x))
-    #    
+
     score = statistics.mean(seats_won_for_republicans)
     
     
     ##This is the acceptance step of the Metropolis-Hasting's algorithm.
     if random.random() < min(1, (math.exp(score) / chain_output['score'][z - 1])**(1/temperature) ):
+         #if code acts weird, check if sign is wrong, unsure 
+         #rand < min(1, P(x')/P(x))
         chain_output['dem_seat_data'].append(seats_won_for_democrats)
         chain_output['rep_seat_data'].append(seats_won_for_republicans)
         chain_output['score'].append(math.exp(statistics.mean(seats_won_for_republicans)))
