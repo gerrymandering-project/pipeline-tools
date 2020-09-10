@@ -37,6 +37,8 @@ for node in graph.nodes():
 # length of chain 
 steps = 30000
 #beta thereshold, how many steps to hold beta at 0
+
+temperature = 1
 beta_threshold = 10000
 #length of each gerrychain step 
 gerrychain_steps = 250
@@ -45,6 +47,9 @@ special_faces = []
 chain_output = { 'dem_seat_data': [], 'rep_seat_data':[], 'score':[] }
 #start with small score to move in right direction
 chain_output['score'].append(1/ 1100000)
+
+
+
 z = 0
 for i in range(steps):
     if z % 100 == 0:
@@ -98,7 +103,7 @@ for i in range(steps):
     
     
     ##This is the acceptance step of the Metropolis-Hasting's algorithm.
-    if random.random() < min(1, math.exp(energy) / chain_output['score'][z - 1]):
+    if random.random() < min(1, (math.exp(energy) / chain_output['score'][z - 1])**temperature ):
         chain_output['dem_seat_data'].append(seats_won_for_democrats)
         chain_output['rep_seat_data'].append(seats_won_for_republicans)
         chain_output['score'].append(math.exp(statistics.mean(seats_won_for_republicans)))
