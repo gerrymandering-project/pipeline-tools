@@ -57,15 +57,23 @@ for i in range(steps):
         print("step ", z)
     face = random.choice(faces)
 
+    
+    ##Makes the Markov chain lazy -- this just makes the chain aperiodic.
     if random.random() > .5:
         if not face in special_faces:
             special_faces.append(face)
         else:
             special_faces.remove(face)
+            
+            
     step_graph = face_sierpinski_mesh(graph, special_faces)
 
     #need to create initial partition
     cddict = recursive_tree_part(step_graph,range(k),totpop/k,"population", .01,1)
+    ####This should be changed to induce the initial partition from the a partition of the original graph.
+    
+    
+    
     
     for node in graph.nodes():
         graph.nodes[node]['part'] = cddict[node]
