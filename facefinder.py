@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 
+from queue import SimpleQueue
 from gerrychain.tree import bipartition_tree as bpt
 from gerrychain import Graph
 from gerrychain import MarkovChain
@@ -55,7 +56,7 @@ def is_clockwise(graph,face, average):
     rotated = [x - first for x in angles]
     next_smallest = min([x for x in rotated if x != 0])
     ind = rotated.index(0)
-    if rotated[(ind + 1)% len(rotated)] == next_smallest:
+    if rotated[(ind + 1) % len(rotated)] == next_smallest:
         return False
     else:
         return True
@@ -236,18 +237,18 @@ def restricted_planar_dual(graph):
         dual_graph.nodes[face]["pos"] = location / len(face)
     ##handle edges
     #Construct incidence table --
-    #We use this to efficiently construc the edges in the dual.
+    #We use this to efficiently construct the edges in the dual.
     incidence = {}
     for v in graph.nodes():
         incidence[v] = set()
-        
+
     for face in graph.graph["faces"]:
         for v in face:
             incidence[v].add(face)
-    
+
     #print(incidence)
-    
-    
+
+
     for e in graph.edges():
         v = e[0]
         for face1 in incidence[v]:
@@ -269,9 +270,9 @@ def draw_with_location(graph):
 #        graph.nodes[x]["pos"] = [graph.nodes[x]["X"], graph.nodes[x]["Y"]]
 
     nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size = 20, width = .5, cmap=plt.get_cmap('jet'))
-  
-    
-def test():  
+
+
+def test():
     graph = nx.grid_graph([4,4])
     for x in graph.nodes():
         graph.nodes[x]["pos"] = x
@@ -299,6 +300,28 @@ def my_mst_bipartition_tree_random(
         possible_cuts = find_balanced_edge_cuts(h, choice=choice)
 
     return choice(possible_cuts).subset
+
+def my_uu_bipartition_tree_random(
+    graph,
+    pop_col,
+    pop_target,
+    epsilon,
+    node_repeats=1,
+    spanning_tree=None,
+    choice=random.choice):
+    populations = {node: graph.nodes[node][pop_col] for node in graph}
+
+    possible_cuts = []
+    if spanning_tree is None:
+        spanning_tree = get_spanning_tree_u_w(graph)
+
+    while len(possible_cuts) == 0:
+        spanning_tree = get_spanning_tree_u_w(graph)
+        h = PopulatedGraph(spanning_tree, populations, pop_target, epsilon)
+        possible_cuts = find_balanced_edge_cuts(h, choice=choice)
+
+    return choice(possible_cuts).subset
+
 def get_spanning_tree_mst(graph):
     for edge in graph.edges:
         graph.edges[edge]["weight"] = random.random()
@@ -307,19 +330,27 @@ def get_spanning_tree_mst(graph):
         graph, algorithm="kruskal", weight="weight"
     )
     return spanning_tree
-def viz(graph, edge_set, partition):
-    values = [1 - int(x in edge_set) for x in graph.edges()]
+
+def viz(partition, edge_set):
+    values = [int(x not in edge_set) for x in partition.graph.edges()]
     color_dictionary = {}
-    for x in graph.nodes():
-        color = 0
-        for block in partition.keys():
-            if x in partition[block]:
-                color_dictionary[x] = color
-            color += 1
-        
-    node_values = [color_dictionary[x] for x in graph.nodes()]
+#    for x in graph.nodes():
+        #color = 0
+        #for block in partition.keys():
+            #if x in partition[block]:
+                #color_dictionary[x] = color
+            #color += 1
+
+    for color, part in enumerate(partition.parts):
+        for node in partition.parts[part]:
+            color_dictionary[node] = color
+
+    node_values = [color_dictionary[x] for x in partition.graph.nodes()]
     f = plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_color = node_values, edge_color = values, width = 4, node_size= 65, font_size = 7)
+    nx.draw(partition.graph, pos=nx.get_node_attributes(partition.graph, 'pos'),
+            node_color = node_values, edge_color = values, width = 0.1,
+            node_size= 45, font_size = 7)
+
 def distance_from_partition(graph, boundary_edges):
     #General Idea:
     #Goal: Given any face of the original graph, want to calculate its distance to the boundary of the partition.
@@ -328,22 +359,23 @@ def distance_from_partition(graph, boundary_edges):
     #d = infinity
 #   For each s in S:
  #    d = min ( distance_in_D(v,s), d)
-    boundary_nodes = set( [x[0] for x in boundary_edges] + [x[1] for x in boundary_edges] )
-    for node in graph.nodes():
-        if node in boundary_nodes:
-            graph.nodes[node]["distance"] = 0
-        else:
-            graph.nodes[node]["distance"] = np.inf
-    for step in range(len(graph.nodes())):
-        for node in graph.nodes():
-            neighbor_distance = min([graph.nodes[x]["distance"] for x in graph.neighbors(node)]) + 1
-            new_distance = min(neighbor_distance, graph.nodes[node]["distance"])
-            graph.nodes[node]["distance"] = new_distance
-    return graph
+    boundary_nodes = set([x[0] for x in boundary_edges] + [x[1] for x in boundary_edges])
+    for node in boundary_nodes:
+        graph.nodes[node]['distance'] = 0
 
-def compute_cross_edge(graph,partition):
-    cross_list = []
-    for n in graph.edges:
-        if Partition.crosses_parts(partition,n):
-            cross_list.append(n)
-    return cross_list
+    visited = set(boundary_nodes)
+    prev_set = boundary_nodes
+    count = 0
+    while len(visited) < len(graph.nodes):
+        count += 1
+        new_set = set([])
+        for node in prev_set:
+            for neighbor in graph.neighbors(node):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    new_set.add(neighbor)
+                    graph.nodes[neighbor]['distance'] = count
+        prev_set = new_set
+
+def compute_cross_edges(partition):
+    return set([edge for edge in partition.graph.edges if Partition.crosses_parts(partition, edge)])
