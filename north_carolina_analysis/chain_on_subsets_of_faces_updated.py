@@ -1,5 +1,7 @@
 ## This script will perform a markov chain on the  subset faces of the north carolina graph, picking a face UAR and sierpinskifying or de-sierpinskifying it, then running gerrychain on the graph, recording central seat tendencies.
 import facefinder
+import numpy as np
+import pandas as pd
 import random
 import statistics
 import math
@@ -176,21 +178,18 @@ def main():
     updaters = {'population': Tally('population'),
                             'cut_edges': cut_edges,
                             }
-    graph, dual = preprocessing("json/NC.json")
+    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
     ideal_population= sum( graph.nodes[x]["population"] for x in graph.nodes())/k
     faces = graph.graph["faces"]
     faces = list(faces)
     #random.choice(faces) will return a random face
-    #TODO: run gerrychain on graph
     totpop = 0
     for node in graph.nodes():
         totpop += int(graph.nodes[node]['population'])
     # length of chain
-    steps = 30000
-    #beta thereshold, how many steps to hold beta at 0
+    steps = 300
 
     temperature = 1
-    beta_threshold = 10000
     #length of each gerrychain step
     gerrychain_steps = 250
     #faces that are currently sierp
@@ -233,7 +232,10 @@ def main():
                                 initial_state=initial_partition, total_steps=gerrychain_steps)
         seats_won_for_republicans = []
         seats_won_for_democrats = []
+        ct = 0
         for part in exp_chain:
+            ct += 1
+            print("gerry step ", ct)
             rep_seats_won = 0
             dem_seats_won = 0
             for i in range(k):
@@ -268,12 +270,15 @@ def main():
 if __name__ ==  '__main__':
     global config
     config = {
-        "INPUT_GRAPH_FILENAME" : "./json/NC.json",
+        "INPUT_GRAPH_FILENAME" : "./jsons/NC.json",
         "X_POSITION" : "C_X",
         "Y_POSITION" : "C_Y",
+        'PARTY_A_COL': "EL16G_PR_R", 
+        'PARTY_B_COL': "EL16G_PR_D",
         "UNDERLYING_GRAPH_FILE" : "./plots/UnderlyingGraph.png",
         "WIDTH" : 1,
         "ASSIGN_COL" : "part",
         "POP_COL" : "population",
+        'SIERPINSKI_POP_STYLE': 'uniform'
     }
     main()
