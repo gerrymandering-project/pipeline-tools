@@ -82,6 +82,9 @@ def face_sierpinski_mesh(graph, special_faces):
             # and Party B votes from its two adjacent nodes which previously exists
             # to itself (so that each previously existing node equally shares
             # its statistics with the two new nodes adjacent to it)
+            
+            # Lorenzo: I think that for the Sierpinskification we should have it take
+            # a piece of the population from the original neighbor node it is declared to be part of.
             if config['SIERPINSKI_POP_STYLE'] == 'uniform':
                 for vert in [vertex, next_vertex]:
                     for keyword, orig_keyword in zip(['POP_COL', 'PARTY_A_COL', 'PARTY_B_COL'],
