@@ -218,7 +218,6 @@ def metamander_around_partition(partition, dual, tag, secret=False, special_para
         special_param (numeric): additional parameter passed to special faces function
     """
 
-    graph = partition.graph
     facefinder.viz(partition, set([]))
     plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
     plt.close()
