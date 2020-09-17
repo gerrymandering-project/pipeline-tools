@@ -218,7 +218,6 @@ def metamander_around_partition(partition, dual, tag, secret=False, special_para
         special_param (numeric): additional parameter passed to special faces function
     """
 
-    graph = partition.graph
     facefinder.viz(partition, set([]))
     plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
     plt.close()
@@ -419,7 +418,7 @@ def saveGraphStatistics(graph, tag):
     data = [(edge, graph.edges[edge]['cut_times'], graph.edges[edge]['sibling_cuts']) for edge in graph.edges()]
     with open('generated_data/graph_statistics_{}.json'.format(tag), 'w') as outfile:
         try:
-            json.dump(data, outfile)
+            json.dump(data, outfile, indent=2)
         except:
             track = traceback.format_exc()
             print(track)
@@ -434,7 +433,7 @@ def savePartition(partition, tag):
     """
     with open('generated_data/partition_{}.json'.format(tag), 'w') as outfile:
         try:
-            json.dump(partition.assignment.to_dict(), outfile)
+            json.dump(partition.assignment.to_dict(), outfile, indent=2)
         except:
             track = traceback.format_exc()
             print(track)
