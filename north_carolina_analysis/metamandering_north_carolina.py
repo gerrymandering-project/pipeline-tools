@@ -253,7 +253,7 @@ def produce_sample(graph, k, tag, sample_size = 500, chaintype='tree'):
                     rep_votes += graph.nodes[n]["EL16G_PR_R"]
                     dem_votes += graph.nodes[n]["EL16G_PR_D"]
             total_seats = int(rep_votes > dem_votes)
-            seats_won += total_seats
+            seats_won += total_seats)
         #total seats won by rep
         seats_won_table.append(seats_won)
         # save gerrymandered partitionss
