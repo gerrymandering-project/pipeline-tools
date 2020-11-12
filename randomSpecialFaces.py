@@ -1,19 +1,12 @@
 import facefinder
-import matplotlib.pyplot as plt
 import time
 from multiprocessing import Pool, Value
 from functools import partial
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from collections import defaultdict
 import networkx as nx
-import numpy as np
-import copy
-import random
-import math
 import json
-import sys
-import os
 import traceback
+import copy
+import matplotlib.pyplot as plt
 
 from gerrychain import Graph
 from gerrychain import MarkovChain
@@ -28,8 +21,24 @@ from gerrychain.proposals import recom
 
 from gerrychain.tree import recursive_tree_part
 
+import random
+import numpy as np
 
-def face_sierpinski_mesh(partition, special_faces):
+def save_fig(graph, path, size):
+    """Saves graph to file in desired formed
+
+    Args:
+        graph (Gerrychain Graph): graph to be saved
+        path (String): path to file location
+        size (int): width of image
+    """
+    plt.figure()
+    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=1, width=size, cmap=plt.get_cmap('jet'))
+    # Gets format from end of filename
+    plt.savefig(path, format=path.split('.')[-1])
+    plt.close()
+
+def face_sierpinski_mesh(partition, graph, special_faces):
     """'Sierpinskifies' certain faces of the graph by adding nodes and edges to
     certain faces.
 
@@ -43,7 +52,6 @@ def face_sierpinski_mesh(partition, special_faces):
         nor 'zero'
     """
 
-    graph = partition.graph
     # Get maximum node label.
     label = max(list(graph.nodes()))
     # Assign each node to its district in partition
@@ -116,6 +124,7 @@ def face_sierpinski_mesh(partition, special_faces):
                 for keyword in ['POP_COL', 'PARTY_A_COL', 'PARTY_B_COL']:
                     graph.nodes[label][config[keyword]] += chosenNode[config[keyword]] // 2
                     chosenNode[config[keyword]] -= chosenNode[config[keyword]] // 2
+
             # Set the population and votes of the new nodes to zero. Do not change
             # previously existing nodes. Assign to random neighbor.
             elif config['SIERPINSKI_POP_STYLE'] == 'zero':
@@ -171,80 +180,8 @@ def preprocessing(path_to_json):
 
     return graph, dual
 
-def save_fig(graph, path, size):
-    """Saves graph to file in desired formed
-
-    Args:
-        graph (Gerrychain Graph): graph to be saved
-        path (String): path to file location
-        size (int): width of image
-    """
-    plt.figure()
-    nx.draw(graph, pos=nx.get_node_attributes(graph, 'pos'), node_size=1, width=size, cmap=plt.get_cmap('jet'))
-    # Gets format from end of filename
-    plt.savefig(path, format=path.split('.')[-1])
-    plt.close()
-
-def determine_special_faces(graph, dist):
-    """Determines the special faces, which are those nodes whose distance is
-    at least k
-
-    Args:
-        graph (Gerrychain Graph): graph to determine special faces of
-        dist (numeric): distance such that nodes are considered special if
-        they have a 'distance' of at least this value
-
-    Returns:
-        list: list of nodes which are special
-    """
-    return [node for node in graph.nodes() if graph.nodes[node]['distance'] >= dist]
-
-def determine_special_faces_random(graph, exp=1):
-    """Determines the special faces, which are determined randomly with the probability
-    of a given node being considered special being proportional to its distance
-    raised to the exp power
-
-    Args:
-        graph (Gerrychain Graph): graph to determine special faces of
-        exp (float, optional): exponent appearing in probability of a given node
-        being considered special. Defaults to 1.
-
-    Returns:
-        list: list of nodes which are special
-    """
-    max_dist = max(graph.nodes[node]['distance'] for node in graph.nodes())
-    return [node for node in graph.nodes() if random.uniform < (graph.nodes[node]['distance'] / max_dist) ** exp]
-
-def metamander_around_partition(partition, dual, tag, secret=False, special_param=2):
-    """Metamanders around a partition by determining the set of special faces,
-    and then sierpinskifying them.
-
-    Args:
-        partition (Gerrychain Partition): Partition to metamander around
-        dual (Networkx Graph): planar dual of partition's graph
-        secret (Boolean): whether to metamander 'in secret'. If True, determines
-        special faces randomly, else not.
-        special_param (numeric): additional parameter passed to special faces function
-    """
-
-    facefinder.viz(partition, set([]))
-    plt.savefig("./plots/large_sample/target_maps/target_map" + tag + ".png", format='png')
-    plt.close()
-
-    # Set of edges which cross from one district to another one
-    cross_edges = facefinder.compute_cross_edges(partition)
-    # Edges of dual graph corresponding to cross_edges
-    dual_crosses = [edge for edge in dual.edges if dual.edges[edge]['original_name'] in cross_edges]
-
-    # Assigns the graph distance from the dual_crosses to each node of the dual graph
-    facefinder.distance_from_partition(dual, dual_crosses)
-    # Assign special faces based upon set distances
-    if secret:
-        special_faces = determine_special_faces_random(dual, special_param)
-    else:
-        special_faces = determine_special_faces(dual, special_param)
-    # Metamander around the partition by Sierpinskifying the special faces
-    face_sierpinski_mesh(partition, special_faces)
+def getKFaces(graph, k):
+    return random.choices(list(graph), k=k)
 
 def saveRunStatistics(statistics, tag):
     """Saves the election statistics of a given list of partitions to a JSON file
@@ -344,7 +281,8 @@ def run_chain(init_part, chaintype, length, ideal_population, id, tag):
         if i % 500 == 0:
             print('{}: {}'.format(id, i))
     saveRunStatistics(statistics, tag)
-    return leftMander
+    # Return average number of seats
+    return sum(statistics['seats']) / len(statistics['seats'])
 
 def drawGraph(graph, property, tag):
     """Draws graph with edges colored according to the value of their chosen
@@ -459,13 +397,14 @@ def main(config_data, id):
         experiments
     """
     try:
+
         timeBeg = time.time()
         print('Experiment', id, 'has begun')
         # Save configuration into global variable
         global config
         config = config_data
 
-        # Get graph and dual graph
+        # Get graph and dual
         graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
         # List of districts in original graph
         parts = list(set([graph.nodes[node][config['ASSIGN_COL']] for node in graph.nodes()]))
@@ -483,24 +422,32 @@ def main(config_data, id):
                     config['ELECTION_NAME'] : election
                     }
 
-        partition = Partition(graph=graph, assignment=config['ASSIGN_COL'], updaters=updaters)
-        # Run Chain to search for a gerrymander, and get it
-        mander = run_chain(partition, config['CHAIN_TYPE'],
-                           config['FIND_GERRY_LENGTH'], ideal_pop, id + 'a',
-                           config['ORIG_RUN_STATS_TAG'] + id)
-        savePartition(mander, config['LEFT_MANDER_TAG'] + id)
-        # Metamanders around the found gerrymander
-        metamander_around_partition(mander, dual, config['TARGET_TAG'] + id, config['SECRET'], config['META_PARAM'])
-        # Refresh assignment and election of partition
+        origPartition = Partition(graph=graph, assignment=config['ASSIGN_COL'], updaters=updaters)
+        minAvg, minPartition = float('inf'), None
+        for i in range(config['RUNS_PER_K_VAL']):
+            tempGraph = copy.deepcopy(origPartition.graph)
+            face_sierpinski_mesh(origPartition, tempGraph , getKFaces(dual, config['k']))
+            # Refresh assignment and election of partition
+            updaters[config['ELECTION_NAME']] = Election(
+                                                         config['ELECTION_NAME'],
+                                                         {'PartyA': config['PARTY_A_COL'],
+                                                          'PartyB': config['PARTY_B_COL']}
+                                                        )
+            newPartition = Partition(graph=tempGraph, assignment=config['ASSIGN_COL'], updaters=updaters)
+            if (avg := run_chain(newPartition, config['CHAIN_TYPE'],
+                                               config['TEST_META_LENGTH'], ideal_pop, id + 'a' + str(i),
+                                               config['TEST_RUN_STATS_TAG'] + id + str(i))) < minAvg:
+                minAvg, minPartition = avg, newPartition
+
         updaters[config['ELECTION_NAME']] = Election(
                                                      config['ELECTION_NAME'],
                                                      {'PartyA': config['PARTY_A_COL'],
                                                       'PartyB': config['PARTY_B_COL']}
                                                     )
-        partition = Partition(graph=graph, assignment=config['ASSIGN_COL'], updaters=updaters)
+        partition = Partition(graph=minPartition.graph, assignment=config['ASSIGN_COL'], updaters=updaters)
         # Run chain again
-        run_chain(partition, config['CHAIN_TYPE'], config['SAMPLE_META_LENGTH'],
-                  ideal_pop, id + 'b', config['GERRY_RUN_STATS_TAG'] + id)
+        run_chain(partition, config['CHAIN_TYPE'], config['FULL_CHAIN_LENGTH'],
+                  ideal_pop, id + 'b', config['FULL_RUN_STATS_TAG'] + id)
         # Save data from experiment to JSON files
         drawGraph(partition.graph, 'cut_times', config['GRAPH_TAG'] + '_single_raw_' + id)
         drawGraph(partition.graph, 'sibling_cuts', config['GRAPH_TAG'] + '_single_adjusted_' + id)
@@ -535,26 +482,29 @@ if __name__ == '__main__':
         "CHAIN_TYPE" : "tree",
         "SECRET" : False,
         "META_PARAM" : 2,
-        "NUM_EXPERIMENTS" : 25,
-        "FIND_GERRY_LENGTH" : 15,
-        "SAMPLE_META_LENGTH" : 50,
-        "GRAPH_TAG" : "NC_GRAPH",
-        "TARGET_TAG" : "NC_TARGET",
-        "LEFT_MANDER_TAG" : "NC_LEFT_MANDER",
-        "ORIG_RUN_STATS_TAG" : "NC_ORIG_RUN_STATS",
-        "GERRY_RUN_STATS_TAG" : "NC_GERRY_RUN_STATS",
-        "GRAPH_STATISTICS_TAG" : "NC_GRAPH_STATISTICS",
+        "GRAPH_TAG" : "NC_GRAPH_RANDOM_FACES",
+        "TARGET_TAG" : "NC_TARGET_RANDOM_FACES",
+        "TEST_RUN_STATS_TAG" : "NC_TEST_RUN_STATS",
+        "FULL_RUN_STATS_TAG" : "NC_FULL_RUN_STATS",
+        "GRAPH_STATISTICS_TAG" : "NC_GRAPH_STATISTICS_RANDOM_FACES",
         "COLORMAP1" : "magma",
         "COLORMAP2" : "viridis",
         "ELECTION_STATISTICS" : ["seats", "efficiency_gap", "mean_median"],
         "GERRY_STATISTICS" : ["efficiency_gap", "seats"],
-        "NUM_PROCESSORS" : 3
+        "NUM_PROCESSORS" : 4,
+        "NUM_EXPERIMENTS" : 5,
+        "RUNS_PER_K_VAL" : 100,
+        "TEST_META_LENGTH" : 1000,
+        "FULL_CHAIN_LENGTH" : 75000,
+        "k_values" : [5, 10, 15, 25, 50, 100, 250, 500, 1000, 5000]
     }
 
     # Run NUM_EXPERIMENTS experiments using NUM_PROCESSORS processors
     pool = Pool(config['NUM_PROCESSORS'])
     for i in range(config['NUM_EXPERIMENTS']):
-        pool.apply_async(main, args = (config, str(i)))
+        for k in config['k_values']:
+            config['k'] = k
+            pool.apply_async(main, args = (config, str(i) + '-' + str(k)))
     pool.close()
     pool.join()
     print('All experiments completed in {:.2f} seconds'.format(time.time() - timeStart))

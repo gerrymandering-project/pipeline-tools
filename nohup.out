@@ -1,0 +1,70 @@
+Traceback (most recent call last):
+  File "metamandering.py", line 1, in <module>
+    import facefinder
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 7, in <module>
+    from gerrychain.tree import bipartition_tree as bpt
+ModuleNotFoundError: No module named 'gerrychain'
+Experiment 0 has begun
+Experiment 1 has begun
+Experiment 2 has begun
+Process ForkPoolWorker-3:
+Traceback (most recent call last):
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 297, in _bootstrap
+    self.run()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 99, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/pool.py", line 121, in worker
+    result = (True, func(*args, **kwds))
+  File "metamandering.py", line 460, in main
+    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
+  File "metamandering.py", line 161, in preprocessing
+    dual = facefinder.restricted_planar_dual(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 230, in restricted_planar_dual
+    graph = compute_face_data(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 96, in compute_face_data
+    run_sum = np.array([0,0]).astype('float64')
+KeyboardInterrupt
+Process ForkPoolWorker-2:
+Traceback (most recent call last):
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 297, in _bootstrap
+    self.run()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 99, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/pool.py", line 121, in worker
+    result = (True, func(*args, **kwds))
+  File "metamandering.py", line 460, in main
+    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
+  File "metamandering.py", line 161, in preprocessing
+    dual = facefinder.restricted_planar_dual(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 230, in restricted_planar_dual
+    graph = compute_face_data(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 98, in compute_face_data
+    run_sum += np.array(graph.nodes[x]["pos"]).astype('float64')
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "metamandering.py", line 550, in <module>
+    pool.join()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/pool.py", line 556, in join
+    self._worker_handler.join()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/threading.py", line 1044, in join
+Process ForkPoolWorker-1:
+    self._wait_for_tstate_lock()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/threading.py", line 1060, in _wait_for_tstate_lock
+    elif lock.acquire(block, timeout):
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 297, in _bootstrap
+    self.run()
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/process.py", line 99, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/mkarrmann/anaconda3/envs/Gerry/lib/python3.7/multiprocessing/pool.py", line 121, in worker
+    result = (True, func(*args, **kwds))
+  File "metamandering.py", line 460, in main
+    graph, dual = preprocessing(config["INPUT_GRAPH_FILENAME"])
+  File "metamandering.py", line 161, in preprocessing
+    dual = facefinder.restricted_planar_dual(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 230, in restricted_planar_dual
+    graph = compute_face_data(graph)
+  File "/home/mkarrmann/Gerry/pipeline-tools/facefinder.py", line 96, in compute_face_data
+    run_sum = np.array([0,0]).astype('float64')
+KeyboardInterrupt
